@@ -358,6 +358,14 @@ public class TuitionCentreSystem {
             User user = AuthService.login(username, password);
             if (user != null) {
                 user.displayMenu(); // Returns to login after logout
+                
+            // Ask if user wants to exit after logout
+                System.out.print("Do you want to exit? (y/n): ");
+                String exitChoice = sc.nextLine();
+                if (exitChoice.equalsIgnoreCase("y")) {
+                    System.out.println("Exiting system. Goodbye!");
+                    break;
+                }
             }
         }
     }
