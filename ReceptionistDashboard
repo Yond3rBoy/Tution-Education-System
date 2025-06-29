@@ -1,0 +1,44 @@
+import javax.swing.*;
+import java.awt.*;
+
+public class ReceptionistDashboard extends JFrame {
+    private Receptionist receptionist;
+
+    public ReceptionistDashboard(Receptionist receptionist) {
+        this.receptionist = receptionist;
+        setTitle("Receptionist Dashboard");
+        setSize(500, 400);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+
+        JPanel panel = new JPanel(new GridLayout(4, 1, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(30, 50, 30, 50));
+        panel.setBackground(new Color(245, 245, 245));
+
+        JButton manageStudentsBtn = new JButton("🎓 Manage Students");
+        JButton scheduleBtn = new JButton("📅 Schedule Classes");
+        JButton logoutBtn = new JButton("🚪 Logout");
+
+        styleButton(manageStudentsBtn);
+        styleButton(scheduleBtn);
+        styleButton(logoutBtn);
+
+        manageStudentsBtn.addActionListener(e -> JOptionPane.showMessageDialog(this, "Manage Students logic here."));
+        scheduleBtn.addActionListener(e -> JOptionPane.showMessageDialog(this, "Schedule Classes logic here."));
+        logoutBtn.addActionListener(e -> {
+            dispose();
+            new LoginForm().setVisible(true);
+        });
+
+        panel.add(manageStudentsBtn);
+        panel.add(scheduleBtn);
+        panel.add(logoutBtn);
+
+        add(panel);
+    }
+
+    private void styleButton(JButton button) {
+        button.setFocusPainted(false);
+        button.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+    }
+}
