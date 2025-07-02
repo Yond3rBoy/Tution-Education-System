@@ -9,6 +9,7 @@ public class StudentDashboard extends JFrame {
     private JList<String> scheduleList;
     private JList<String> requestList;
     private JLabel feesLabel, paidLabel, balanceLabel;
+    private JButton btnChat; // Chat button
 
     public StudentDashboard(User user) {
         this.studentUser = user;
@@ -17,15 +18,32 @@ public class StudentDashboard extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
+        // Main container panel
+        JPanel mainPanel = new JPanel(new BorderLayout());
+
+        // Top panel for chat button
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnChat = new JButton("Chat");
+        topPanel.add(btnChat);
+
+        // Tabbed pane for core functions
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("My Schedule", createSchedulePanel());
         tabbedPane.addTab("Enrollment Requests", createRequestPanel());
         tabbedPane.addTab("Payment Status", createPaymentPanel());
         tabbedPane.addTab("My Profile", createProfilePanel());
-        add(tabbedPane);
+        
+        // Add components to the main container
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        add(mainPanel);
+
+        // Add action listener for the chat button
+        btnChat.addActionListener(e -> openChatDialog());
         
         // Load initial data
         refreshAllData();
+        refreshChatNotification();
     }
     
     private void refreshAllData() {
@@ -189,5 +207,46 @@ public class StudentDashboard extends JFrame {
         double balance = status.getOrDefault("balance", 0.0);
         balanceLabel.setText(String.format("Current Balance: $%.2f", balance));
         balanceLabel.setForeground(balance > 0 ? Color.RED : new Color(0, 128, 0)); // Red if balance due, green otherwise
+    }
+
+    private void openChatDialog() {
+        User currentUser = this.studentUser; // Use the correct user object
+
+        List<User> eligibleUsers = DataManager.getUsersForChat(currentUser);
+        if (eligibleUsers.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No other users available to chat with.", "Chat", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        User[] usersArray = eligibleUsers.toArray(new User[0]);
+
+        User selectedUser = (User) JOptionPane.showInputDialog(
+                this, "Select a user to chat with:", "Start a Chat",
+                JOptionPane.PLAIN_MESSAGE, null, usersArray, usersArray[0]);
+
+        if (selectedUser != null) {
+            ChatFrame chatFrame = new ChatFrame(currentUser, selectedUser);
+            chatFrame.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                    refreshChatNotification();
+                }
+            });
+            chatFrame.setVisible(true);
+        }
+    }
+
+    public void refreshChatNotification() {
+        User currentUser = this.studentUser; // Use the correct user object
+        int unreadCount = DataManager.getUnreadMessageCount(currentUser); 
+        if (unreadCount > 0) {
+            btnChat.setText("Chat (" + unreadCount + " unread)");
+            btnChat.setForeground(Color.RED);
+            btnChat.setFont(new Font(btnChat.getFont().getName(), Font.BOLD, btnChat.getFont().getSize()));
+        } else {
+            btnChat.setText("Chat");
+            btnChat.setForeground(Color.BLACK);
+            btnChat.setFont(new Font(btnChat.getFont().getName(), Font.PLAIN, btnChat.getFont().getSize()));
+        }
     }
 }
