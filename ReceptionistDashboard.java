@@ -2,6 +2,7 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Vector;
 import java.util.stream.Collectors;
 import javax.swing.*;
@@ -11,21 +12,26 @@ public class ReceptionistDashboard extends JFrame {
     private User receptionistUser;
     private JTable studentTable;
     private DefaultTableModel studentTableModel;
-    private JButton btnChat; // Chat button
+    private JButton btnChat;
+    private JButton btnAnnouncements;
 
     public ReceptionistDashboard(User user) {
         this.receptionistUser = user;
         setTitle("Receptionist Dashboard - Welcome, " + user.getFullName());
         setSize(900, 700);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
 
         // Main container panel
         JPanel mainPanel = new JPanel(new BorderLayout());
 
-        // Top panel for chat button
+        // Top panel for all action buttons
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnAnnouncements = new JButton("Announcements");
+        JButton btnRelease = new JButton("Release Announcement");
         btnChat = new JButton("Chat");
+        topPanel.add(btnAnnouncements);
+        topPanel.add(btnRelease);
         topPanel.add(btnChat);
 
         // Tabbed pane for core functions
@@ -33,17 +39,20 @@ public class ReceptionistDashboard extends JFrame {
         tabbedPane.addTab("Manage Students", createStudentPanel());
         tabbedPane.addTab("My Profile", createProfilePanel());
 
-        // Add components to the main container
+        // Assemble the main view
         mainPanel.add(topPanel, BorderLayout.NORTH);
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
         add(mainPanel);
 
-        // Add action listener for the chat button
+        // --- Action Listeners ---
         btnChat.addActionListener(e -> openChatDialog());
-        
-        // Initial data load
+        btnAnnouncements.addActionListener(e -> openAnnouncements());
+        btnRelease.addActionListener(e -> showReleaseAnnouncementDialog());
+
+        // --- Initial Data Load & Notifications ---
         refreshStudentTable();
         refreshChatNotification();
+        refreshAnnouncementNotification();
     }
 
     private JPanel createStudentPanel() {
@@ -365,4 +374,62 @@ public class ReceptionistDashboard extends JFrame {
         }
     }
 
+    private void openAnnouncements() {
+        // CHANGE this.adminUser to the correct user for each dashboard
+        AnnouncementsFrame announcementsFrame = new AnnouncementsFrame(this.receptionistUser);
+        announcementsFrame.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                // Refresh notification when the announcements window is closed
+                refreshAnnouncementNotification();
+            }
+        });
+        announcementsFrame.setVisible(true);
+    }
+    
+    // Method to update the button with unread count
+    public void refreshAnnouncementNotification() {
+        // CHANGE this.adminUser to the correct user for each dashboard
+        Set<String> readIds = DataManager.getReadAnnouncementIds(this.receptionistUser);
+        List<Announcement> allAnnouncements = DataManager.getAllAnnouncements();
+        long unreadCount = allAnnouncements.stream().filter(a -> !readIds.contains(a.getId())).count();
+
+        if (unreadCount > 0) {
+            btnAnnouncements.setText("Announcements (" + unreadCount + ")");
+            btnAnnouncements.setForeground(Color.BLUE); // Use a different color than chat
+            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.BOLD, btnAnnouncements.getFont().getSize()));
+        } else {
+            btnAnnouncements.setText("Announcements");
+            btnAnnouncements.setForeground(Color.BLACK);
+            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.PLAIN, btnAnnouncements.getFont().getSize()));
+        }
+    }
+
+    private void showReleaseAnnouncementDialog() {
+        JTextField titleField = new JTextField(30);
+        JTextArea contentArea = new JTextArea(5, 30);
+        contentArea.setLineWrap(true);
+        contentArea.setWrapStyleWord(true);
+
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.add(new JLabel("Title:"), BorderLayout.NORTH);
+        panel.add(titleField, BorderLayout.CENTER);
+        panel.add(new JScrollPane(contentArea), BorderLayout.SOUTH);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Release New Announcement", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            String title = titleField.getText().trim();
+            String content = contentArea.getText().trim();
+            if (title.isEmpty() || content.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Title and content cannot be empty.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            // CHANGE this.adminUser to this.receptionistUser in the other dashboard
+            if (DataManager.createAnnouncement(this.receptionistUser, title, content)) {
+                JOptionPane.showMessageDialog(this, "Announcement released successfully.");
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to release announcement.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
 }
