@@ -1,6 +1,7 @@
 import java.awt.*;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Vector;
 import javax.swing.*;
 
@@ -9,41 +10,47 @@ public class StudentDashboard extends JFrame {
     private JList<String> scheduleList;
     private JList<String> requestList;
     private JLabel feesLabel, paidLabel, balanceLabel;
-    private JButton btnChat; // Chat button
+    private JButton btnChat;
+    private JButton btnAnnouncements;
 
     public StudentDashboard(User user) {
         this.studentUser = user;
         setTitle("Student Dashboard - Welcome, " + user.getFullName());
         setSize(800, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
-
+        
         // Main container panel
         JPanel mainPanel = new JPanel(new BorderLayout());
 
-        // Top panel for chat button
+        // Top panel for action buttons
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnAnnouncements = new JButton("Announcements");
         btnChat = new JButton("Chat");
+        topPanel.add(btnAnnouncements);
         topPanel.add(btnChat);
-
+        
         // Tabbed pane for core functions
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("My Schedule", createSchedulePanel());
         tabbedPane.addTab("Enrollment Requests", createRequestPanel());
         tabbedPane.addTab("Payment Status", createPaymentPanel());
+        tabbedPane.addTab("My Results", createResultsPanel());
         tabbedPane.addTab("My Profile", createProfilePanel());
         
-        // Add components to the main container
+        // Assemble the main view
         mainPanel.add(topPanel, BorderLayout.NORTH);
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
         add(mainPanel);
-
-        // Add action listener for the chat button
-        btnChat.addActionListener(e -> openChatDialog());
         
-        // Load initial data
+        // --- Action Listeners ---
+        btnChat.addActionListener(e -> openChatDialog());
+        btnAnnouncements.addActionListener(e -> openAnnouncements());
+        
+        // --- Initial Data Load & Notifications ---
         refreshAllData();
         refreshChatNotification();
+        refreshAnnouncementNotification();
     }
     
     private void refreshAllData() {
@@ -247,6 +254,55 @@ public class StudentDashboard extends JFrame {
             btnChat.setText("Chat");
             btnChat.setForeground(Color.BLACK);
             btnChat.setFont(new Font(btnChat.getFont().getName(), Font.PLAIN, btnChat.getFont().getSize()));
+        }
+    }
+
+    private JPanel createResultsPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        JTextArea resultsArea = new JTextArea("Click 'View/Refresh' to see your results.");
+        resultsArea.setEditable(false);
+        resultsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        panel.add(new JScrollPane(resultsArea), BorderLayout.CENTER);
+        
+        JButton refreshButton = new JButton("View / Refresh Results");
+        refreshButton.addActionListener(e -> {
+            String report = DataManager.getStudentResultsReport(studentUser.getId());
+            resultsArea.setText(report);
+            resultsArea.setCaretPosition(0); // Scroll to top
+        });
+        
+        panel.add(refreshButton, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private void openAnnouncements() {
+        // CHANGE this.adminUser to the correct user for each dashboard
+        AnnouncementsFrame announcementsFrame = new AnnouncementsFrame(this.studentUser);
+        announcementsFrame.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                // Refresh notification when the announcements window is closed
+                refreshAnnouncementNotification();
+            }
+        });
+        announcementsFrame.setVisible(true);
+    }
+    
+    // Method to update the button with unread count
+    public void refreshAnnouncementNotification() {
+        // CHANGE this.adminUser to the correct user for each dashboard
+        Set<String> readIds = DataManager.getReadAnnouncementIds(this.studentUser);
+        List<Announcement> allAnnouncements = DataManager.getAllAnnouncements();
+        long unreadCount = allAnnouncements.stream().filter(a -> !readIds.contains(a.getId())).count();
+
+        if (unreadCount > 0) {
+            btnAnnouncements.setText("Announcements (" + unreadCount + ")");
+            btnAnnouncements.setForeground(Color.BLUE); // Use a different color than chat
+            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.BOLD, btnAnnouncements.getFont().getSize()));
+        } else {
+            btnAnnouncements.setText("Announcements");
+            btnAnnouncements.setForeground(Color.BLACK);
+            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.PLAIN, btnAnnouncements.getFont().getSize()));
         }
     }
 }
