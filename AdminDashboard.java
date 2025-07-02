@@ -12,6 +12,7 @@ public class AdminDashboard extends JFrame {
     private DefaultTableModel tutorTableModel;
     private JTable receptionistTable;
     private DefaultTableModel receptionistTableModel;
+    private JButton btnChat;
 
     public AdminDashboard(User user) {
         this.adminUser = user;
@@ -20,6 +21,13 @@ public class AdminDashboard extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
+        JPanel mainPanel = new JPanel(new BorderLayout()); // <-- NEW
+
+        // --- Create the top panel for the chat button ---
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT)); // <-- NEW
+        btnChat = new JButton("Chat"); // <-- NEW
+        topPanel.add(btnChat); // <-- NEW
+
         JTabbedPane tabbedPane = new JTabbedPane();
 
         tabbedPane.addTab("Manage Tutors", createTutorPanel());
@@ -27,10 +35,17 @@ public class AdminDashboard extends JFrame {
         tabbedPane.addTab("Income Report", createReportPanel());
         tabbedPane.addTab("My Profile", createProfilePanel());
 
-        add(tabbedPane);
-        
+         mainPanel.add(topPanel, BorderLayout.NORTH); // <-- NEW
+        mainPanel.add(tabbedPane, BorderLayout.CENTER); // <-- NEW
+
+        // --- Add the main container panel to the frame ---
+        add(mainPanel); // <-- CHANGED from add(tabbedPane)
+
+        // --- Add the chat button's action listener ---
+        btnChat.addActionListener(e -> openChatDialog());
         refreshTutorTable();
         refreshReceptionistTable();
+        refreshChatNotification();
     }
     // ... (createTutorPanel, createReceptionistPanel, createReportPanel are the same) ...
         private JPanel createTutorPanel() {
@@ -280,6 +295,55 @@ public class AdminDashboard extends JFrame {
             } else {
                 JOptionPane.showMessageDialog(this, "Failed to register " + role, "Error", JOptionPane.ERROR_MESSAGE);
             }
+        }
+    }
+
+    private void openChatDialog() {
+        // This 'user' variable must be the logged-in user object for the dashboard
+        User currentUser = this.adminUser; // Correct user for this dashboard
+
+        List<User> eligibleUsers = DataManager.getUsersForChat(currentUser);
+        if (eligibleUsers.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No other users available to chat with.", "Chat", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        User[] usersArray = eligibleUsers.toArray(new User[0]);
+
+        User selectedUser = (User) JOptionPane.showInputDialog(
+                this,
+                "Select a user to chat with:",
+                "Start a Chat",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                usersArray,
+                usersArray[0]);
+
+        if (selectedUser != null) {
+            ChatFrame chatFrame = new ChatFrame(currentUser, selectedUser);
+            // Add a listener to refresh notifications when the chat window closes
+            chatFrame.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                    refreshChatNotification();
+                }
+            });
+            chatFrame.setVisible(true);
+        }
+    }
+
+    // Method to update the chat button with unread message count
+    public void refreshChatNotification() {
+        User currentUser = this.adminUser; // Correct user for this dashboard
+        int unreadCount = DataManager.getUnreadMessageCount(currentUser); 
+        if (unreadCount > 0) {
+            btnChat.setText("Chat (" + unreadCount + ")");
+            btnChat.setForeground(Color.RED);
+            btnChat.setFont(new Font(btnChat.getFont().getName(), Font.BOLD, btnChat.getFont().getSize()));
+        } else {
+            btnChat.setText("Chat");
+            btnChat.setForeground(Color.BLACK);
+            btnChat.setFont(new Font(btnChat.getFont().getName(), Font.PLAIN, btnChat.getFont().getSize()));
         }
     }
 }
