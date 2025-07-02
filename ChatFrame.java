@@ -29,16 +29,24 @@ public class ChatFrame extends JFrame {
         add(new JScrollPane(conversationArea), BorderLayout.CENTER);
 
         // --- Message Input ---
-        JPanel bottomPanel = new JPanel(new BorderLayout());
+        JPanel inputPanel = new JPanel(new BorderLayout());
         messageField = new JTextField();
         JButton sendButton = new JButton("Send");
-        bottomPanel.add(messageField, BorderLayout.CENTER);
-        bottomPanel.add(sendButton, BorderLayout.EAST);
+        inputPanel.add(messageField, BorderLayout.CENTER);
+        inputPanel.add(sendButton, BorderLayout.EAST);
+
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        JButton backButton = new JButton("Back to Dashboard");
+
+        bottomPanel.add(inputPanel, BorderLayout.CENTER);
+        bottomPanel.add(backButton, BorderLayout.SOUTH);
+
         add(bottomPanel, BorderLayout.SOUTH);
 
         // --- Action Listeners ---
         sendButton.addActionListener(e -> sendMessage());
         messageField.addActionListener(e -> sendMessage()); // Allow sending with Enter key
+        backButton.addActionListener(e -> this.dispose());
 
         // --- Initial Load ---
         // Mark messages as read when the window is opened
