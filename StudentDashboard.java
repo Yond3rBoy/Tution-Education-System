@@ -17,6 +17,7 @@ public class StudentDashboard extends JFrame {
         this.studentUser = user;
         setTitle("Student Dashboard - Welcome, " + user.getFullName());
         setSize(800, 600);
+        // CHANGED: Dispose this window only, don't exit the whole app
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         
@@ -25,10 +26,12 @@ public class StudentDashboard extends JFrame {
 
         // Top panel for action buttons
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnLogout = new JButton("Logout"); // NEW Logout button
         btnAnnouncements = new JButton("Announcements");
         btnChat = new JButton("Chat");
         topPanel.add(btnAnnouncements);
         topPanel.add(btnChat);
+        topPanel.add(btnLogout); // Add logout button to panel
         
         // Tabbed pane for core functions
         JTabbedPane tabbedPane = new JTabbedPane();
@@ -44,13 +47,28 @@ public class StudentDashboard extends JFrame {
         add(mainPanel);
         
         // --- Action Listeners ---
+        btnLogout.addActionListener(e -> logout()); // NEW Logout action
         btnChat.addActionListener(e -> openChatDialog());
         btnAnnouncements.addActionListener(e -> openAnnouncements());
         
+        // Add a listener for the 'X' button
+        this.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                logout();
+            }
+        });
+
         // --- Initial Data Load & Notifications ---
         refreshAllData();
         refreshChatNotification();
         refreshAnnouncementNotification();
+    }
+    
+    // --- Logout Method ---
+    private void logout() {
+        this.dispose(); // Close this dashboard window
+        SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true)); // Open a new login window
     }
     
     private void refreshAllData() {
