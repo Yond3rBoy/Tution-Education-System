@@ -3,6 +3,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -21,6 +22,8 @@ public class DataManager {
     private static final String ENROLLMENTS_FILE = "data/enrollments.txt";
     private static final String PAYMENTS_FILE = "data.txt/payments";
     private static final String REQUESTS_FILE = "data/requests.txt";
+    private static final String CHATS_FILE = "data/chats.txt";
+
 
     // --- CORE USER MANAGEMENT ---
 
@@ -521,6 +524,127 @@ public class DataManager {
         status.put("totalPaid", totalPaid);
         status.put("balance", totalFees - totalPaid);
         return status;
+    }
+
+    // --- CHAT SYSTEM FUNCTIONS ---
+
+    public static boolean sendMessage(User sender, User receiver, String content) {
+        String messageId = getNextIdForPrefix("MSG-", CHATS_FILE);
+        // Use a sortable timestamp format
+        String timestamp = LocalDateTime.now().toString(); 
+        String status = "UNREAD";
+        
+        // IMPORTANT: We must escape commas in the user-generated content to not break our CSV
+        String escapedContent = content.replace(",", ";"); 
+
+        String messageLine = String.join(",", messageId, sender.getUsername(), receiver.getUsername(), timestamp, status, escapedContent) + "\n";
+        
+        try {
+            Files.write(Paths.get(CHATS_FILE), messageLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static List<String> getConversation(User user1, User user2) {
+        List<String> conversation = new ArrayList<>();
+        String u1 = user1.getUsername();
+        String u2 = user2.getUsername();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(CHATS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 6);
+                if (data.length < 6) continue;
+
+                String sender = data[1];
+                String receiver = data[2];
+
+                // Check if the message is between the two users
+                if ((sender.equals(u1) && receiver.equals(u2)) || (sender.equals(u2) && receiver.equals(u1))) {
+                    // Format for display: "Timestamp,Sender,Message"
+                    // Un-escape the message content before adding it
+                    String unescapedContent = data[5].replace(";", ",");
+                    conversation.add(data[3] + "," + sender + "," + unescapedContent);
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        
+        // Sort the conversation by timestamp
+        conversation.sort(Comparator.comparing(line -> LocalDateTime.parse(line.split(",")[0])));
+        
+        return conversation;
+    }
+    
+    public static void markMessagesAsRead(User viewer, User otherUser) {
+        List<String> updatedLines = new ArrayList<>();
+        try {
+            List<String> allLines = Files.readAllLines(Paths.get(CHATS_FILE));
+            for (String line : allLines) {
+                String[] data = line.split(",", 6);
+                if (data.length < 6) {
+                    updatedLines.add(line);
+                    continue;
+                }
+                // Mark messages as read where the viewer is the receiver and the other user is the sender
+                if (data[2].equals(viewer.getUsername()) && data[1].equals(otherUser.getUsername())) {
+                    data[4] = "READ"; // Change status from UNREAD to READ
+                    updatedLines.add(String.join(",", data));
+                } else {
+                    updatedLines.add(line);
+                }
+            }
+            Files.write(Paths.get(CHATS_FILE), updatedLines);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static int getUnreadMessageCount(User currentUser) {
+        int count = 0;
+        try (BufferedReader reader = new BufferedReader(new FileReader(CHATS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 6);
+                if (data.length < 6) continue;
+                // Count if the current user is the receiver and status is UNREAD
+                if (data[2].equals(currentUser.getUsername()) && data[4].equalsIgnoreCase("UNREAD")) {
+                    count++;
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        return count;
+    }
+
+    public static List<User> getUsersForChat(User currentUser) {
+        List<User> allUsers = new ArrayList<>();
+        allUsers.addAll(getAllUsersByRole("Admin"));
+        allUsers.addAll(getAllUsersByRole("Receptionist"));
+        allUsers.addAll(getAllUsersByRole("Tutor"));
+        allUsers.addAll(getAllUsersByRole("Student"));
+
+        List<User> eligibleUsers = new ArrayList<>();
+        String currentUserRole = currentUser.getRole();
+
+        for (User otherUser : allUsers) {
+            // A user cannot chat with themselves
+            if (otherUser.getUsername().equals(currentUser.getUsername())) {
+                continue;
+            }
+
+            String otherUserRole = otherUser.getRole();
+            
+            // Apply communication rules
+            boolean isBlocked = (currentUserRole.equals("Admin") && otherUserRole.equals("Student")) ||
+                                (currentUserRole.equals("Student") && otherUserRole.equals("Admin"));
+            
+            if (!isBlocked) {
+                eligibleUsers.add(otherUser);
+            }
+        }
+        return eligibleUsers;
     }
 
     // --- HELPER METHODS ---
