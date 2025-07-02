@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DataManager {
 
@@ -23,6 +24,10 @@ public class DataManager {
     private static final String PAYMENTS_FILE = "data.txt/payments";
     private static final String REQUESTS_FILE = "data/requests.txt";
     private static final String CHATS_FILE = "data/chats.txt";
+    private static final String RESULTS_FILE = "data/results.txt";
+    private static final String ANNOUNCEMENTS_FILE = "data/announcements.txt";
+    private static final String READ_ANNOUNCEMENTS_FILE = "data/read_announcements.txt";
+
 
 
     // --- CORE USER MANAGEMENT ---
@@ -111,13 +116,19 @@ public class DataManager {
             String filePath = getFilePathForRole(role);
             String newUserLine;
 
+            // The core data string is created first
             if ("Tutor".equalsIgnoreCase(role)) {
-                newUserLine = String.join(",", newUserId, username, password, fullName, specialization) + "\n";
+                newUserLine = String.join(",", newUserId, username, password, fullName, specialization);
             } else {
-                newUserLine = String.join(",", newUserId, username, password, fullName) + "\n";
+                newUserLine = String.join(",", newUserId, username, password, fullName);
             }
 
-            Files.write(Paths.get(filePath), newUserLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            // We append the system's line separator to the data string
+            // This is more reliable than just "\n"
+            String lineToWrite = newUserLine + System.lineSeparator();
+
+            // Write the full line (with the newline) to the file
+            Files.write(Paths.get(filePath), lineToWrite.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             return true;
         } catch (IOException e) {
             e.printStackTrace();
@@ -728,7 +739,7 @@ public class DataManager {
         return Files.lines(Paths.get(COURSES_FILE)).map(line -> line.split(",", 6)).filter(data -> data.length > 0 && data[0].equals(courseId)).map(data -> new String[]{data[3], data[4]}).findFirst().orElse(null);
     }
 
-    private static String getCourseInfoById(String courseId) {
+    public static String getCourseInfoById(String courseId) {
         try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -739,5 +750,215 @@ public class DataManager {
             }
         } catch (IOException e) { /* ignore */ }
         return "Unknown Course";
+    }
+     // --- RESULTS SYSTEM FUNCTIONS ---
+
+    // For Tutors: To upload a result for a student in one of their courses.
+    public static boolean uploadResult(String enrollmentId, String assessmentName, int score, int totalMarks) {
+        String resultId = getNextIdForPrefix("RES-", RESULTS_FILE);
+        String uploadDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+
+        String resultLine = String.join(",", resultId, enrollmentId, assessmentName, String.valueOf(score), String.valueOf(totalMarks), uploadDate) + "\n";
+        
+        try {
+            Files.write(Paths.get(RESULTS_FILE), resultLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // A private helper to get all raw result data for a specific enrollment
+    private static List<String[]> getRawResultsForEnrollment(String enrollmentId) {
+        List<String[]> results = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(RESULTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 6);
+                if (data.length == 6 && data[1].equals(enrollmentId)) {
+                    results.add(data);
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        return results;
+    }
+
+    // A private helper to calculate average and grade from raw results
+    private static Map<String, Object> calculateMetrics(List<String[]> rawResults) {
+        Map<String, Object> metrics = new HashMap<>();
+        double totalScore = 0;
+        double totalMaxScore = 0;
+
+        for (String[] result : rawResults) {
+            totalScore += Double.parseDouble(result[3]);
+            totalMaxScore += Double.parseDouble(result[4]);
+        }
+
+        double average = (totalMaxScore > 0) ? (totalScore / totalMaxScore) * 100 : 0;
+        String grade;
+        if (average >= 90) grade = "A+";
+        else if (average >= 85) grade = "A";
+        else if (average >= 80) grade = "A-";
+        else if (average >= 75) grade = "B+";
+        else if (average >= 70) grade = "B";
+        else if (average >= 65) grade = "C+";
+        else if (average >= 60) grade = "C";
+        else if (average >= 50) grade = "D";
+        else grade = "F";
+
+        metrics.put("average", average);
+        metrics.put("grade", grade);
+        metrics.put("details", rawResults); // Include the raw data for detailed view
+        return metrics;
+    }
+    
+    // For Students and Admins: Get a formatted report for a single student
+    public static String getStudentResultsReport(String studentId) {
+        StringBuilder report = new StringBuilder();
+        Map<String, String> enrollments = getStudentEnrollments(studentId); // Map<EnrollmentID, CourseInfo>
+
+        if (enrollments.isEmpty()) {
+            return "No courses enrolled.";
+        }
+        
+        report.append("Results for Student ID: ").append(studentId).append("\n\n");
+
+        for (Map.Entry<String, String> entry : enrollments.entrySet()) {
+            String enrollmentId = entry.getKey();
+            String courseInfo = entry.getValue().split(" - ")[0]; // "Course Name (Level)"
+            report.append("--- Course: ").append(courseInfo).append(" ---\n");
+            
+            List<String[]> rawResults = getRawResultsForEnrollment(enrollmentId);
+            if (rawResults.isEmpty()) {
+                report.append("No results uploaded for this course yet.\n\n");
+                continue;
+            }
+            
+            Map<String, Object> metrics = calculateMetrics(rawResults);
+            report.append(String.format("Overall Average: %.2f%%   Grade: %s\n", (Double) metrics.get("average"), (String) metrics.get("grade")));
+            report.append("--------------------------------------------------\n");
+            report.append(String.format("%-20s | %-10s | %-10s\n", "Assessment", "Score", "Total"));
+            report.append("--------------------------------------------------\n");
+            for (String[] result : rawResults) {
+                report.append(String.format("%-20s | %-10s | %-10s\n", result[2], result[3], result[4]));
+            }
+            report.append("\n\n");
+        }
+        return report.toString();
+    }
+
+    // For Tutors: Get a summary report for all students in one of their courses
+    public static String getTutorCourseResultsReport(String courseId) {
+        StringBuilder report = new StringBuilder();
+        List<String> studentIDs = new ArrayList<>();
+        Map<String, String> enrollmentIdToStudentIdMap = new HashMap<>();
+
+        // 1. Get all enrollments for this course
+        try (BufferedReader reader = new BufferedReader(new FileReader(ENROLLMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                if (data.length == 3 && data[2].equals(courseId)) {
+                    studentIDs.add(data[1]);
+                    enrollmentIdToStudentIdMap.put(data[0], data[1]);
+                }
+            }
+        } catch (IOException e) { return "Error reading enrollment data."; }
+        
+        if (studentIDs.isEmpty()) return "No students are enrolled in this course.";
+        
+        // 2. Create a map of student ID to student name
+        Map<String, String> studentIdToNameMap = getAllUsersByRole("Student").stream()
+                .collect(Collectors.toMap(User::getId, User::getFullName));
+        
+        report.append("Results Summary for Course ID: ").append(courseId).append("\n");
+        report.append("------------------------------------------------------------------\n");
+        report.append(String.format("%-20s | %-15s | %-10s\n", "Student Name", "Average (%)", "Grade"));
+        report.append("------------------------------------------------------------------\n");
+
+        // 3. Loop through enrollments, calculate metrics, and build the report
+        for (Map.Entry<String, String> entry : enrollmentIdToStudentIdMap.entrySet()) {
+            String enrollmentId = entry.getKey();
+            String studentId = entry.getValue();
+            String studentName = studentIdToNameMap.getOrDefault(studentId, "Unknown Student");
+            
+            List<String[]> rawResults = getRawResultsForEnrollment(enrollmentId);
+            if (rawResults.isEmpty()) {
+                report.append(String.format("%-20s | %-15s | %-10s\n", studentName, "N/A", "N/A"));
+                continue;
+            }
+            
+            Map<String, Object> metrics = calculateMetrics(rawResults);
+            report.append(String.format("%-20s | %-15.2f | %-10s\n", studentName, (Double) metrics.get("average"), (String) metrics.get("grade")));
+        }
+        
+        return report.toString();
+    }
+
+     public static boolean createAnnouncement(User author, String title, String content) {
+        String announcementId = getNextIdForPrefix("ANC-", ANNOUNCEMENTS_FILE);
+        String date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        // Escape commas to prevent breaking the CSV format
+        String escapedTitle = title.replace(",", ";");
+        String escapedContent = content.replace(",", ";");
+
+        String line = String.join(",", announcementId, escapedTitle, escapedContent, author.getUsername(), date) + "\n";
+        try {
+            Files.write(Paths.get(ANNOUNCEMENTS_FILE), line.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    public static List<Announcement> getAllAnnouncements() {
+        List<Announcement> announcements = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(ANNOUNCEMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 5);
+                if (data.length == 5) {
+                    // Un-escape commas for display
+                    String title = data[1].replace(";", ",");
+                    String content = data[2].replace(";", ",");
+                    announcements.add(new Announcement(data[0], title, content, data[3], data[4]));
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        // Sort by date, newest first
+        announcements.sort(Comparator.comparing(Announcement::getDate).reversed());
+        return announcements;
+    }
+
+    public static Set<String> getReadAnnouncementIds(User user) {
+        Set<String> readIds = new HashSet<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(READ_ANNOUNCEMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                if (data.length == 2 && data[0].equals(user.getUsername())) {
+                    readIds.add(data[1]);
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        return readIds;
+    }
+    
+    public static void markAnnouncementAsRead(User user, String announcementId) {
+        // First, check if it's already marked as read to avoid duplicate entries
+        Set<String> readIds = getReadAnnouncementIds(user);
+        if (readIds.contains(announcementId)) {
+            return; // Already read
+        }
+        
+        String line = user.getUsername() + "," + announcementId + "\n";
+        try {
+            Files.write(Paths.get(READ_ANNOUNCEMENTS_FILE), line.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
