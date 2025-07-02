@@ -1,0 +1,3 @@
+C-101,Primary 5 Mathematics,TUT-301,Primary 5,Math,200.00,"Mon 4-6 PM"
+C-102,Primary 5 Science,TUT-302,Primary 5,Science,200.00,"Tue 5-7 PM"
+C-201,Secondary 2 English,TUT-303,Secondary 2,English,250.00,"Wed 6-8 PM"
