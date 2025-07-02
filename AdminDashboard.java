@@ -1,51 +1,71 @@
-// ... (imports remain the same) ...
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import java.util.Vector;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
 public class AdminDashboard extends JFrame {
-    // ... (class members and constructor are the same) ...
     private User adminUser;
     private JTable tutorTable;
     private DefaultTableModel tutorTableModel;
     private JTable receptionistTable;
     private DefaultTableModel receptionistTableModel;
     private JButton btnChat;
+    private JButton btnAnnouncements;
 
     public AdminDashboard(User user) {
         this.adminUser = user;
-        setTitle("Admin Dashboard");
-        setSize(800, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setTitle("Admin Dashboard - Welcome, " + user.getFullName());
+        setSize(900, 700); // Increased size slightly for new buttons
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
+        this.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                logout();
+            }
+        });
 
-        JPanel mainPanel = new JPanel(new BorderLayout()); // <-- NEW
+        // Main container panel
+        JPanel mainPanel = new JPanel(new BorderLayout());
 
-        // --- Create the top panel for the chat button ---
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT)); // <-- NEW
-        btnChat = new JButton("Chat"); // <-- NEW
-        topPanel.add(btnChat); // <-- NEW
+        // Top panel for all action buttons
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnAnnouncements = new JButton("Announcements");
+        JButton btnRelease = new JButton("Release Announcement");
+        btnChat = new JButton("Chat");
+        topPanel.add(btnAnnouncements);
+        topPanel.add(btnRelease);
+        topPanel.add(btnChat);
+        JButton btnLogout = new JButton("Logout"); // <-- ADD THIS
+        topPanel.add(btnLogout);
 
+        // Tabbed pane for core functions
         JTabbedPane tabbedPane = new JTabbedPane();
-
         tabbedPane.addTab("Manage Tutors", createTutorPanel());
         tabbedPane.addTab("Manage Receptionists", createReceptionistPanel());
         tabbedPane.addTab("Income Report", createReportPanel());
+        tabbedPane.addTab("View Student Results", createResultsPanelForAdmin());
         tabbedPane.addTab("My Profile", createProfilePanel());
 
-         mainPanel.add(topPanel, BorderLayout.NORTH); // <-- NEW
-        mainPanel.add(tabbedPane, BorderLayout.CENTER); // <-- NEW
+        // Assemble the main view
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        add(mainPanel);
 
-        // --- Add the main container panel to the frame ---
-        add(mainPanel); // <-- CHANGED from add(tabbedPane)
-
-        // --- Add the chat button's action listener ---
+        // --- Action Listeners ---
         btnChat.addActionListener(e -> openChatDialog());
+        btnAnnouncements.addActionListener(e -> openAnnouncements()); // <-- THIS WAS MISSING
+        btnRelease.addActionListener(e -> showReleaseAnnouncementDialog()); // <-- THIS WAS MISSING
+        btnLogout.addActionListener(e -> logout());
+
+        // --- Initial Data Load & Notifications ---
         refreshTutorTable();
         refreshReceptionistTable();
         refreshChatNotification();
+        refreshAnnouncementNotification(); // <-- THIS WAS MISSING
     }
     // ... (createTutorPanel, createReceptionistPanel, createReportPanel are the same) ...
         private JPanel createTutorPanel() {
@@ -345,5 +365,100 @@ public class AdminDashboard extends JFrame {
             btnChat.setForeground(Color.BLACK);
             btnChat.setFont(new Font(btnChat.getFont().getName(), Font.PLAIN, btnChat.getFont().getSize()));
         }
+    }
+
+        private JPanel createResultsPanelForAdmin() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        JTextArea resultsArea = new JTextArea("Select a student to view their results.");
+        resultsArea.setEditable(false);
+        resultsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+
+        // Top panel for controls
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        List<User> allStudents = DataManager.getAllUsersByRole("Student");
+        JComboBox<User> studentSelector = new JComboBox<>(new Vector<>(allStudents));
+        
+        topPanel.add(new JLabel("Select Student:"));
+        topPanel.add(studentSelector);
+
+        JButton viewButton = new JButton("View Results");
+        topPanel.add(viewButton);
+
+        panel.add(topPanel, BorderLayout.NORTH);
+        panel.add(new JScrollPane(resultsArea), BorderLayout.CENTER);
+
+        viewButton.addActionListener(e -> {
+            User selectedStudent = (User) studentSelector.getSelectedItem();
+            if (selectedStudent == null) return;
+            String report = DataManager.getStudentResultsReport(selectedStudent.getId());
+            resultsArea.setText(report);
+            resultsArea.setCaretPosition(0);
+        });
+
+        return panel;
+    }
+
+    private void openAnnouncements() {
+        // CHANGE this.adminUser to the correct user for each dashboard
+        AnnouncementsFrame announcementsFrame = new AnnouncementsFrame(this.adminUser);
+        announcementsFrame.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                // Refresh notification when the announcements window is closed
+                refreshAnnouncementNotification();
+            }
+        });
+        announcementsFrame.setVisible(true);
+    }
+    
+    // Method to update the button with unread count
+    public void refreshAnnouncementNotification() {
+        // CHANGE this.adminUser to the correct user for each dashboard
+        Set<String> readIds = DataManager.getReadAnnouncementIds(this.adminUser);
+        List<Announcement> allAnnouncements = DataManager.getAllAnnouncements();
+        long unreadCount = allAnnouncements.stream().filter(a -> !readIds.contains(a.getId())).count();
+
+        if (unreadCount > 0) {
+            btnAnnouncements.setText("Announcements (" + unreadCount + ")");
+            btnAnnouncements.setForeground(Color.BLUE); // Use a different color than chat
+            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.BOLD, btnAnnouncements.getFont().getSize()));
+        } else {
+            btnAnnouncements.setText("Announcements");
+            btnAnnouncements.setForeground(Color.BLACK);
+            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.PLAIN, btnAnnouncements.getFont().getSize()));
+        }
+    }
+
+    private void showReleaseAnnouncementDialog() {
+        JTextField titleField = new JTextField(30);
+        JTextArea contentArea = new JTextArea(5, 30);
+        contentArea.setLineWrap(true);
+        contentArea.setWrapStyleWord(true);
+
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.add(new JLabel("Title:"), BorderLayout.NORTH);
+        panel.add(titleField, BorderLayout.CENTER);
+        panel.add(new JScrollPane(contentArea), BorderLayout.SOUTH);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Release New Announcement", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            String title = titleField.getText().trim();
+            String content = contentArea.getText().trim();
+            if (title.isEmpty() || content.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Title and content cannot be empty.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            // CHANGE this.adminUser to this.receptionistUser in the other dashboard
+            if (DataManager.createAnnouncement(this.adminUser, title, content)) {
+                JOptionPane.showMessageDialog(this, "Announcement released successfully.");
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to release announcement.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void logout() {
+        this.dispose(); // Close this dashboard window
+        new LoginFrame().setVisible(true); // Open a new login screen
     }
 }
