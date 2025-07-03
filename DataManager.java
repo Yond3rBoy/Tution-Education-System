@@ -1140,4 +1140,27 @@ public class DataManager {
         
         return report.toString();
     }
+
+    // Add this new method to DataManager.java
+
+    // Checks if a username exists in any of the user role files.
+    public static boolean isUsernameValid(String username) {
+        // List all user files to check
+        List<String> userFiles = Arrays.asList(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
+
+        for (String filePath : userFiles) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] data = line.split(",", 2); // Split only once to get the username efficiently
+                    if (data.length > 1 && data[1].startsWith(username + ",")) {
+                        return true; // Found the username, no need to check further
+                    }
+                }
+            } catch (IOException e) {
+                // Ignore if a file doesn't exist, just move to the next one
+            }
+        }
+        return false; // Did not find the username in any file
+    }
 }
