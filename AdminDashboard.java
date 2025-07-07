@@ -48,6 +48,7 @@ public class AdminDashboard extends JFrame {
         tabbedPane.addTab("Manage Receptionists", createReceptionistPanel());
         tabbedPane.addTab("Income Report", createReportPanel());
         tabbedPane.addTab("Tutor Payroll", createTutorPayrollPanel());
+        tabbedPane.addTab("Income vs Payroll", createIncomeVsPayrollPanel());
         tabbedPane.addTab("View Student Results", createResultsPanelForAdmin());
         tabbedPane.addTab("My Profile", createProfilePanel());
         
@@ -510,6 +511,47 @@ public class AdminDashboard extends JFrame {
             int month = (int) monthComboBox.getSelectedItem();
             int year = (int) yearComboBox.getSelectedItem();
             String report = DataManager.generateTutorPayrollReport(selectedTutor.getId(), month, year);
+            reportArea.setText(report);
+            reportArea.setCaretPosition(0);
+        });
+        
+        return panel;
+    }
+
+    private JPanel createIncomeVsPayrollPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        JTextArea reportArea = new JTextArea("Select a month and year to generate the comprehensive financial report.");
+        reportArea.setEditable(false);
+        reportArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        panel.add(new JScrollPane(reportArea), BorderLayout.CENTER);
+
+        // Controls for selecting month and year
+        JPanel controlsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        
+        JComboBox<Integer> monthComboBox = new JComboBox<>();
+        for (int i = 1; i <= 12; i++) monthComboBox.addItem(i);
+        
+        JComboBox<Integer> yearComboBox = new JComboBox<>();
+        int currentYear = LocalDate.now().getYear();
+        for (int i = currentYear - 2; i <= currentYear; i++) yearComboBox.addItem(i);
+        
+        monthComboBox.setSelectedItem(LocalDate.now().getMonthValue());
+        yearComboBox.setSelectedItem(currentYear);
+        
+        JButton btnGenerate = new JButton("Generate Financial Summary");
+        controlsPanel.add(new JLabel("Month:"));
+        controlsPanel.add(monthComboBox);
+        controlsPanel.add(new JLabel("Year:"));
+        controlsPanel.add(yearComboBox);
+        controlsPanel.add(btnGenerate);
+        
+        panel.add(controlsPanel, BorderLayout.NORTH);
+
+        // Action listener to generate the comprehensive report
+        btnGenerate.addActionListener(e -> {
+            int month = (int) monthComboBox.getSelectedItem();
+            int year = (int) yearComboBox.getSelectedItem();
+            String report = DataManager.generateIncomeVsPayrollReport(month, year);
             reportArea.setText(report);
             reportArea.setCaretPosition(0);
         });

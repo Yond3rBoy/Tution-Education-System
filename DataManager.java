@@ -12,21 +12,21 @@ public class DataManager {
 
     // --- FILE CONSTANTS ---
     // User files
-    private static final String ADMINS_FILE = "data/admins.txt";
-    private static final String TUTORS_FILE = "data/tutors.txt";
-    private static final String RECEPTIONISTS_FILE = "data/receptionists.txt";
-    private static final String STUDENTS_FILE = "data/students.txt";
+    private static final String ADMINS_FILE = "admins.txt";
+    private static final String TUTORS_FILE = "tutors.txt";
+    private static final String RECEPTIONISTS_FILE = "receptionists.txt";
+    private static final String STUDENTS_FILE = "students.txt";
     
     // Data files
-    private static final String STUDENT_DETAILS_FILE = "data/student_details.txt";
-    private static final String COURSES_FILE = "data/courses.txt";
-    private static final String ENROLLMENTS_FILE = "data/enrollments.txt";
-    private static final String PAYMENTS_FILE = "data.txt/payments";
-    private static final String REQUESTS_FILE = "data/requests.txt";
-    private static final String CHATS_FILE = "data/chats.txt";
-    private static final String RESULTS_FILE = "data/results.txt";
-    private static final String ANNOUNCEMENTS_FILE = "data/announcements.txt";
-    private static final String READ_ANNOUNCEMENTS_FILE = "data/read_announcements.txt";
+    private static final String STUDENT_DETAILS_FILE = "student_details.txt";
+    private static final String COURSES_FILE = "courses.txt";
+    private static final String ENROLLMENTS_FILE = "enrollments.txt";
+    private static final String PAYMENTS_FILE = "payments.txt";
+    private static final String REQUESTS_FILE = "requests.txt";
+    private static final String CHATS_FILE = "chats.txt";
+    private static final String RESULTS_FILE = "results.txt";
+    private static final String ANNOUNCEMENTS_FILE = "announcements.txt";
+    private static final String READ_ANNOUNCEMENTS_FILE = "read_announcements.txt";
 
 
 
@@ -1162,5 +1162,123 @@ public class DataManager {
             }
         }
         return false; // Did not find the username in any file
+    }
+
+    // Generate comprehensive income vs payroll report for admin financial overview
+    public static String generateIncomeVsPayrollReport(int month, int year) {
+        StringBuilder report = new StringBuilder();
+        report.append("=========================================================\n");
+        report.append("          FINANCIAL SUMMARY REPORT\n");
+        report.append("=========================================================\n");
+        report.append("Period: ").append(String.format("%02d", month)).append("/").append(year).append("\n\n");
+
+        // 1. Calculate total income for the period
+        double totalIncome = 0.0;
+        Map<String, Map<String, Double>> incomeByLevelAndSubject = new HashMap<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        
+        try {
+            if (Files.exists(Paths.get(PAYMENTS_FILE))) {
+                List<String> payments = Files.readAllLines(Paths.get(PAYMENTS_FILE));
+                for (String paymentLine : payments) {
+                    String[] pData = paymentLine.split(",");
+                    if (pData.length < 4) continue;
+                    LocalDate paymentDate = LocalDate.parse(pData[3], formatter);
+                    if (paymentDate.getMonthValue() == month && paymentDate.getYear() == year) {
+                        double amount = Double.parseDouble(pData[2]);
+                        totalIncome += amount;
+                        
+                        // Also categorize by level and subject for detailed breakdown
+                        String enrollmentId = pData[1];
+                        String courseId = findCourseIdForEnrollment(enrollmentId);
+                        if (courseId != null) {
+                            String[] courseDetails = findCourseDetails(courseId);
+                            if (courseDetails != null) {
+                                String level = courseDetails[0];
+                                String subject = courseDetails[1];
+                                incomeByLevelAndSubject.computeIfAbsent(level, k -> new HashMap<>()).merge(subject, amount, Double::sum);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException | java.time.format.DateTimeParseException e) {
+            return "Error reading payment data: " + e.getMessage();
+        }
+
+        // 2. Display income breakdown
+        report.append("--- INCOME BREAKDOWN ---\n");
+        if (incomeByLevelAndSubject.isEmpty()) {
+            report.append("No income recorded for this period.\n");
+        } else {
+            for (Map.Entry<String, Map<String, Double>> levelEntry : incomeByLevelAndSubject.entrySet()) {
+                report.append("Level: ").append(levelEntry.getKey()).append("\n");
+                for (Map.Entry<String, Double> subjectEntry : levelEntry.getValue().entrySet()) {
+                    report.append(String.format("  - %-15s: $%.2f\n", subjectEntry.getKey(), subjectEntry.getValue()));
+                }
+            }
+        }
+        report.append(String.format("\nTOTAL INCOME: $%.2f\n\n", totalIncome));
+
+        // 3. Calculate payroll expenses for all tutors
+        report.append("--- PAYROLL EXPENSES ---\n");
+        List<User> allTutors = getAllUsersByRole("Tutor");
+        double totalPayrollExpenses = 0.0;
+        
+        if (allTutors.isEmpty()) {
+            report.append("No tutors found.\n");
+        } else {
+            final double CENTER_COMMISSION_RATE = 0.20;
+            
+            for (User tutor : allTutors) {
+                String tutorId = tutor.getId();
+                double tutorGrossIncome = 0.0;
+                
+                // Calculate gross income for this tutor
+                List<String[]> tutorCourses = getCoursesByTutor(tutorId);
+                for (String[] courseData : tutorCourses) {
+                    String courseId = courseData[0];
+                    double courseFee = Double.parseDouble(courseData[5]);
+                    
+                    // Count students enrolled in this course
+                    long studentCount = 0;
+                    try {
+                        studentCount = Files.lines(Paths.get(ENROLLMENTS_FILE))
+                                .map(line -> line.split(","))
+                                .filter(data -> data.length == 3 && data[2].equals(courseId))
+                                .count();
+                    } catch (IOException e) { /* ignore */ }
+                    
+                    tutorGrossIncome += studentCount * courseFee;
+                }
+                
+                double tutorNetPayout = tutorGrossIncome * (1 - CENTER_COMMISSION_RATE);
+                totalPayrollExpenses += tutorNetPayout;
+                
+                if (tutorGrossIncome > 0) {
+                    report.append(String.format("%-20s: Gross $%.2f -> Net $%.2f\n", 
+                        tutor.getFullName(), tutorGrossIncome, tutorNetPayout));
+                }
+            }
+        }
+        
+        report.append(String.format("\nTOTAL PAYROLL EXPENSES: $%.2f\n\n", totalPayrollExpenses));
+
+        // 4. Calculate and display net profit/loss
+        double netProfitLoss = totalIncome - totalPayrollExpenses;
+        report.append("--- FINANCIAL SUMMARY ---\n");
+        report.append(String.format("Total Income:         $%.2f\n", totalIncome));
+        report.append(String.format("Total Payroll:        $%.2f\n", totalPayrollExpenses));
+        report.append("----------------------------------\n");
+        
+        if (netProfitLoss >= 0) {
+            report.append(String.format("NET PROFIT:           $%.2f\n", netProfitLoss));
+        } else {
+            report.append(String.format("NET LOSS:             $%.2f\n", Math.abs(netProfitLoss)));
+        }
+        
+        report.append("=========================================================\n");
+        
+        return report.toString();
     }
 }
