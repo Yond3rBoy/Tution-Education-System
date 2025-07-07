@@ -1,6 +1,1 @@
-<<<<<<< HEAD
 REC-201,reception,recep123,Sarah Connor
-REC-202,hibye,1234,nigga
-=======
-REC-201,reception,recep123,Sarah Connor
->>>>>>> 855ea29c0851919cdb96a78a57a58b2797558527
