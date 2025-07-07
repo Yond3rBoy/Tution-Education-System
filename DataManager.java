@@ -193,13 +193,17 @@ public class DataManager {
     
     // --- RECEPTIONIST-SPECIFIC FUNCTIONS ---
 
+    // In DataManager.java
     public static List<String> getAvailableCourses() {
         List<String> courses = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] data = line.split(",", 6);
-                if (data.length >= 6) {
+                // CHANGE THIS:
+                String[] data = line.split(",", 7); // Was split(",", 6)
+                // CHANGE THIS:
+                if (data.length >= 7) { // Check for 7 columns now
+                    // This line is now safe because the split is correct
                     String courseInfo = String.format("%s: %s (%s) - $%.2f", data[0], data[1], data[3], Double.parseDouble(data[5]));
                     courses.add(courseInfo);
                 }
@@ -310,9 +314,9 @@ public class DataManager {
         try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] data = line.split(",", 6);
+                String[] data = line.split(",", 7);
                 // Check if the tutorID column (index 2) matches
-                if (data.length >= 6 && data[2].equals(tutorId)) {
+                if (data.length >= 7 && data[2].equals(tutorId)) {
                     courses.add(data);
                 }
             }
@@ -320,10 +324,16 @@ public class DataManager {
         return courses;
     }
     
-    public static boolean addCourse(String courseName, String tutorId, String level, String subject, double fee) {
+    public static boolean addCourse(String courseName, String tutorId, String level, String subject, double fee, String schedule) {
         try {
-            String courseId = getNextIdForPrefix("C-", COURSES_FILE, 101); // Start course IDs from 101
-            String courseLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee)) + "\n";
+            String courseId = getNextIdForPrefix("C-", COURSES_FILE, 101);
+            
+            // CHANGE THIS:
+            // String courseLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee)) + "\n";
+            
+            // TO THIS (add the schedule to the line being saved):
+            String courseLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee), schedule) + "\n";
+            
             Files.write(Paths.get(COURSES_FILE), courseLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             return true;
         } catch (IOException e) {
@@ -332,15 +342,21 @@ public class DataManager {
         }
     }
 
-    public static boolean updateCourse(String courseId, String courseName, String level, String subject, double fee) {
+    public static boolean updateCourse(String courseId, String courseName, String level, String subject, double fee, String schedule) {
         try {
             List<String> lines = Files.readAllLines(Paths.get(COURSES_FILE));
             boolean updated = false;
             for (int i = 0; i < lines.size(); i++) {
                 String[] data = lines.get(i).split(",", 2);
                 if (data.length > 0 && data[0].equals(courseId)) {
-                    String tutorId = lines.get(i).split(",")[2]; // Preserve the original tutor ID
-                    String updatedLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee));
+                    String tutorId = lines.get(i).split(",")[2];
+                    
+                    // CHANGE THIS:
+                    // String updatedLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee));
+                    
+                    // TO THIS (add the schedule to the updated line):
+                    String updatedLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee), schedule);
+                    
                     lines.set(i, updatedLine);
                     updated = true;
                     break;
@@ -734,17 +750,26 @@ public class DataManager {
         return Files.lines(Paths.get(ENROLLMENTS_FILE)).map(line -> line.split(",")).filter(data -> data.length > 2 && data[0].equals(enrollmentId)).map(data -> data[2]).findFirst().orElse(null);
     }
     
+    // In DataManager.java
     private static String[] findCourseDetails(String courseId) throws IOException {
         if (!Files.exists(Paths.get(COURSES_FILE))) return null;
-        return Files.lines(Paths.get(COURSES_FILE)).map(line -> line.split(",", 6)).filter(data -> data.length > 0 && data[0].equals(courseId)).map(data -> new String[]{data[3], data[4]}).findFirst().orElse(null);
+        return Files.lines(Paths.get(COURSES_FILE))
+                // CHANGE THIS:
+                .map(line -> line.split(",", 7)) // Was split(",", 6)
+                .filter(data -> data.length > 0 && data[0].equals(courseId))
+                .map(data -> new String[]{data[3], data[4]})
+                .findFirst().orElse(null);
     }
 
+    // In DataManager.java
     public static String getCourseInfoById(String courseId) {
         try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] data = line.split(",", 6);
-                if (data.length >= 6 && data[0].equals(courseId)) {
+                // CHANGE THIS:
+                String[] data = line.split(",", 7); // Was split(",", 6)
+                // CHANGE THIS:
+                if (data.length >= 7 && data[0].equals(courseId)) { // Check for 7 columns
                     return String.format("%s (%s) - $%.2f", data[1], data[3], Double.parseDouble(data[5]));
                 }
             }
@@ -960,5 +985,182 @@ public class DataManager {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static List<String[]> getAllPendingRequests() {
+        List<String[]> requests = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(REQUESTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 5);
+                // The status is in column 3
+                if (data.length == 5 && data[3].equalsIgnoreCase("PENDING")) {
+                    requests.add(data); // Add the full request data
+                }
+            }
+        } catch (IOException e) { /* ignore if file doesn't exist */ }
+        return requests;
+    }
+
+    // For Receptionist: Update the status of a request after handling it.
+    public static boolean updateRequestStatus(String requestId, String newStatus) {
+        File inputFile = new File(REQUESTS_FILE);
+        if (!inputFile.exists()) return false;
+        
+        List<String> outLines = new ArrayList<>();
+        boolean updated = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 5);
+                if (data.length == 5 && data[0].equals(requestId)) {
+                    data[3] = newStatus; // Update the status column
+                    outLines.add(String.join(",", data));
+                    updated = true;
+                } else {
+                    outLines.add(line);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if (updated) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(inputFile, false))) { // false to overwrite
+                for (String line : outLines) {
+                    writer.write(line + System.lineSeparator());
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+        return updated;
+    }
+
+    public static Set<String> getStudentCourseIDs(String studentId) {
+        Set<String> courseIDs = new HashSet<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(ENROLLMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                if (data.length == 3 && data[1].equals(studentId)) {
+                    courseIDs.add(data[2]);
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        return courseIDs;
+    }
+
+     public static String getEnrollmentId(String studentId, String courseId) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(ENROLLMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                // Check if column 1 is the studentID AND column 2 is the courseID
+                if (data.length == 3 && data[1].equals(studentId) && data[2].equals(courseId)) {
+                    return data[0]; // Return the enrollmentID from column 0
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null; // Return null if no matching enrollment is found
+    }
+
+    public static String generateTutorPayrollReport(String tutorId, int month, int year) {
+        final double CENTER_COMMISSION_RATE = 0.20;
+        double monthlyTotalGross = 0.0;
+        
+        StringBuilder report = new StringBuilder();
+        report.append("========================================================\n");
+        report.append("          Tutor Payroll Report\n");
+        report.append("========================================================\n");
+
+        // Find the tutor's name for the report header
+        User tutor = getAllUsersByRole("Tutor").stream()
+                .filter(u -> u.getId().equals(tutorId))
+                .findFirst().orElse(null);
+        
+        if (tutor == null) {
+            return "Tutor with ID " + tutorId + " not found.";
+        }
+        
+        report.append("Tutor Name: ").append(tutor.getFullName()).append(" (").append(tutorId).append(")\n");
+        report.append("Period: ").append(String.format("%02d", month)).append("/").append(year).append("\n\n");
+        report.append("--- Earnings Breakdown by Course ---\n\n");
+
+        // 1. Get all courses taught by this tutor
+        List<String[]> tutorCourses = getCoursesByTutor(tutorId);
+
+        if (tutorCourses.isEmpty()) {
+            report.append("No courses assigned to this tutor.\n");
+        } else {
+            // 2. For each course, find enrolled students and calculate earnings
+            for (String[] courseData : tutorCourses) {
+                String courseId = courseData[0];
+                String courseName = courseData[1];
+                double courseFee = Double.parseDouble(courseData[5]);
+                
+                // Count students enrolled in this specific course
+                long studentCount = 0;
+                try {
+                    studentCount = Files.lines(Paths.get(ENROLLMENTS_FILE))
+                            .map(line -> line.split(","))
+                            .filter(data -> data.length == 3 && data[2].equals(courseId))
+                            .count();
+                } catch (IOException e) { /* ignore */ }
+                
+                if (studentCount > 0) {
+                    double grossForCourse = studentCount * courseFee;
+                    monthlyTotalGross += grossForCourse;
+                    
+                    report.append("Course: ").append(courseName).append(" (").append(courseId).append(")\n");
+                    report.append(String.format("  - Students Enrolled: %d\n", studentCount));
+                    report.append(String.format("  - Fee per Student:   $%.2f\n", courseFee));
+                    report.append(String.format("  - Gross for Course:  $%.2f\n\n", grossForCourse));
+                }
+            }
+        }
+        
+        // 3. Final Calculation
+        double centerCommission = monthlyTotalGross * CENTER_COMMISSION_RATE;
+        double tutorNetPayout = monthlyTotalGross - centerCommission;
+
+        report.append("--------------------------------------------------------\n");
+        report.append("                   MONTHLY SUMMARY\n");
+        report.append("--------------------------------------------------------\n");
+        report.append(String.format("Total Gross Income (All Courses):   $%.2f\n", monthlyTotalGross));
+        report.append(String.format("Center Commission (%.0f%%):           -$%.2f\n", CENTER_COMMISSION_RATE * 100, centerCommission));
+        report.append("--------------------------------------------------------\n");
+        report.append(String.format("TUTOR NET PAYOUT:                   $%.2f\n", tutorNetPayout));
+        report.append("========================================================\n");
+        
+        return report.toString();
+    }
+
+    // Add this new method to DataManager.java
+
+    // Checks if a username exists in any of the user role files.
+    public static boolean isUsernameValid(String username) {
+        // List all user files to check
+        List<String> userFiles = Arrays.asList(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
+
+        for (String filePath : userFiles) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] data = line.split(",", 2); // Split only once to get the username efficiently
+                    if (data.length > 1 && data[1].startsWith(username + ",")) {
+                        return true; // Found the username, no need to check further
+                    }
+                }
+            } catch (IOException e) {
+                // Ignore if a file doesn't exist, just move to the next one
+            }
+        }
+        return false; // Did not find the username in any file
     }
 }
