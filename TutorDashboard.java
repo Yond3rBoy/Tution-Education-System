@@ -1,101 +1,189 @@
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.Vector;
 import java.util.stream.Collectors;
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 
 public class TutorDashboard extends JFrame {
     private User tutorUser;
+    
+    private CardLayout cardLayout;
+    private JPanel contentPanel;
+    private JButton btnAnnouncements, btnChat, btnLogout;
+
     private JTable courseTable;
     private DefaultTableModel courseTableModel;
     private JComboBox<String> courseSelector;
-    private JButton btnChat;
-    private JButton btnAnnouncements;
 
+    private JList<String> studentList;
+    private JTextArea resultsArea;
+
+    private static final Color BG_COLOR = new Color(24, 34, 54);
+    private static final Color FIELD_BG_COLOR = new Color(42, 53, 76);
+    private static final Color PRIMARY_COLOR = new Color(67, 102, 163);
+    private static final Color TEXT_COLOR = new Color(230, 230, 230);
+    
     public TutorDashboard(User user) {
         this.tutorUser = user;
-        setTitle("Tutor Dashboard - Welcome, " + user.getFullName());
-        setSize(900, 700);
+        setTitle("The Learning Hub - Tutor Dashboard");
+        setSize(1200, 800);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         
-        // Initialize the shared component FIRST to prevent NullPointerException
         courseSelector = new JComboBox<>();
+        studentList = new JList<>();
+        resultsArea = new JTextArea("Select a course to view or upload results.");
         
-        // Main container panel
         JPanel mainPanel = new JPanel(new BorderLayout());
-
-        // Top panel for action buttons
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton btnLogout = new JButton("Logout");
-        btnAnnouncements = new JButton("Announcements");
-        btnChat = new JButton("Chat");
-        topPanel.add(btnAnnouncements);
-        topPanel.add(btnChat);
-        topPanel.add(btnLogout);
-
-        // Tabbed pane for core functions
-        JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("Manage My Courses", createCoursePanel());
-        tabbedPane.addTab("Upload/View Results", createResultsPanel());
-        tabbedPane.addTab("View Enrolled Students", createViewStudentsPanel());
-        tabbedPane.addTab("My Payroll", createPayrollPanel());
-        tabbedPane.addTab("My Profile", createProfilePanel());
+        mainPanel.setBackground(BG_COLOR);
         
-        // Assemble the main view
-        mainPanel.add(topPanel, BorderLayout.NORTH);
-        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        mainPanel.add(createHeaderPanel(), BorderLayout.NORTH);
+
+        cardLayout = new CardLayout();
+        contentPanel = new JPanel(cardLayout);
+        contentPanel.setBackground(BG_COLOR);
+
+        contentPanel.add(createManageCoursesPanel(), "MANAGE_COURSES");
+        contentPanel.add(createResultsPanel(), "RESULTS");
+        contentPanel.add(createViewStudentsPanel(), "VIEW_STUDENTS");
+        contentPanel.add(createPayrollPanel(), "PAYROLL");
+        contentPanel.add(createWeeklyTimetablePanel(), "WEEKLY_TIMETABLE");
+        contentPanel.add(createProfilePanel(), "PROFILE");
+        
+        mainPanel.add(contentPanel, BorderLayout.CENTER);
         add(mainPanel);
 
-        // --- Action Listeners ---
-        btnLogout.addActionListener(e -> logout());
-        btnChat.addActionListener(e -> openChatDialog());
-        btnAnnouncements.addActionListener(e -> openAnnouncements());
+        courseSelector.addActionListener(e -> onCourseSelectionChange());
 
-        // Add a listener for the 'X' button to trigger logout
-        this.addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                logout();
-            }
-        });
-
-        // --- Initial Data Load & Notifications ---
         refreshCourseData();
         refreshChatNotification();
         refreshAnnouncementNotification();
+
+        cardLayout.show(contentPanel, "MANAGE_COURSES");
     }
 
-    // --- Logout Method ---
+    private void onCourseSelectionChange() {
+        String selectedCourse = (String) courseSelector.getSelectedItem();
+        if (selectedCourse == null) return;
+        
+        String courseId = selectedCourse.split(":")[0];
+        
+        List<String> students = DataManager.getStudentsByCourse(courseId);
+        studentList.setListData(new Vector<>(students));
+        
+        String report = DataManager.getTutorCourseResultsReport(courseId);
+        resultsArea.setText(report);
+        resultsArea.setCaretPosition(0);
+    }
+
+    private JPanel createHeaderPanel() {
+        JPanel fullHeaderPanel = new JPanel();
+        fullHeaderPanel.setLayout(new BoxLayout(fullHeaderPanel, BoxLayout.Y_AXIS));
+        fullHeaderPanel.setBackground(BG_COLOR);
+
+        JPanel topHeader = new JPanel(new BorderLayout());
+        topHeader.setBackground(BG_COLOR);
+        topHeader.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        
+        JLabel welcomeLabel = new JLabel("Welcome, " + tutorUser.getFullName());
+        welcomeLabel.setForeground(TEXT_COLOR);
+        welcomeLabel.setFont(new Font("Arial", Font.BOLD, 24));
+        topHeader.add(welcomeLabel, BorderLayout.WEST);
+
+        JPanel topRightButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        topRightButtons.setBackground(BG_COLOR);
+        
+        btnAnnouncements = createStyledButton("Announcements");
+        btnChat = createStyledButton("Chat");
+        btnLogout = createStyledButton("Logout");
+        
+        btnAnnouncements.addActionListener(e -> openAnnouncements());
+        btnChat.addActionListener(e -> openChatDialog());
+        btnLogout.addActionListener(e -> logout());
+        this.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) { logout(); }
+        });
+        
+        topRightButtons.add(btnAnnouncements);
+        topRightButtons.add(btnChat);
+        topRightButtons.add(btnLogout);
+        topHeader.add(topRightButtons, BorderLayout.EAST);
+
+        JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
+        navPanel.setBackground(BG_COLOR);
+        navPanel.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
+
+        JButton btnManageCourses = createStyledButton("Manage Courses");
+        JButton btnViewResults = createStyledButton("Upload / View Results");
+        JButton btnViewStudents = createStyledButton("View Enrolled Students");
+        JButton btnMyPayroll = createStyledButton("My Payroll");
+        JButton btnWeeklyTimetable = createStyledButton("Weekly Timetable");
+        JButton btnMyProfile = createStyledButton("My Profile");
+
+        navPanel.add(btnManageCourses);
+        navPanel.add(btnViewResults);
+        navPanel.add(btnViewStudents);
+        navPanel.add(btnMyPayroll);
+        navPanel.add(btnWeeklyTimetable);
+        navPanel.add(btnMyProfile);
+
+        btnManageCourses.addActionListener(e -> cardLayout.show(contentPanel, "MANAGE_COURSES"));
+        btnViewResults.addActionListener(e -> cardLayout.show(contentPanel, "RESULTS"));
+        btnViewStudents.addActionListener(e -> cardLayout.show(contentPanel, "VIEW_STUDENTS"));
+        btnMyPayroll.addActionListener(e -> cardLayout.show(contentPanel, "PAYROLL"));
+        btnWeeklyTimetable.addActionListener(e -> cardLayout.show(contentPanel, "WEEKLY_TIMETABLE"));
+        btnMyProfile.addActionListener(e -> cardLayout.show(contentPanel, "PROFILE"));
+
+        fullHeaderPanel.add(topHeader);
+        fullHeaderPanel.add(navPanel);
+        return fullHeaderPanel;
+    }
+    
     private void logout() {
         this.dispose();
         SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
     }
-    
-    private void refreshCourseData() {
-        refreshCourseTable();
-        refreshCourseSelector();
-    }
 
-    // --- Panel for Managing Courses ---
-    private JPanel createCoursePanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
+    private JPanel createManageCoursesPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 20));
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         String[] columnNames = {"ID", "Course Name", "Level", "Subject", "Fee"};
         courseTableModel = new DefaultTableModel(columnNames, 0) {
             @Override public boolean isCellEditable(int row, int column) { return false; }
         };
         courseTable = new JTable(courseTableModel);
-        panel.add(new JScrollPane(courseTable), BorderLayout.CENTER);
+        styleTable(courseTable);
+        
+        JScrollPane scrollPane = new JScrollPane(courseTable);
+        scrollPane.getViewport().setBackground(BG_COLOR);
+        scrollPane.setBorder(BorderFactory.createLineBorder(FIELD_BG_COLOR));
+        panel.add(scrollPane, BorderLayout.CENTER);
 
-        JPanel buttonPanel = new JPanel();
-        JButton btnAdd = new JButton("Add New Course");
-        JButton btnUpdate = new JButton("Update Selected Course");
-        JButton btnDelete = new JButton("Delete Selected Course");
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
+        buttonPanel.setBackground(BG_COLOR);
+        JButton btnAdd = createStyledButton("Add New Course");
+        JButton btnUpdate = createStyledButton("Update Selected Course");
+        JButton btnDelete = createStyledButton("Delete Selected Course");
         buttonPanel.add(btnAdd);
         buttonPanel.add(btnUpdate);
         buttonPanel.add(btnDelete);
@@ -108,94 +196,89 @@ public class TutorDashboard extends JFrame {
         return panel;
     }
     
-    // --- Panel for Uploading/Viewing Results ---
     private JPanel createResultsPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        JTextArea resultsArea = new JTextArea("Select a course to view or upload results.");
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        styleJTextArea(resultsArea);
         resultsArea.setEditable(false);
-        resultsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        topPanel.add(new JLabel("Select Course:"));
-        topPanel.add(courseSelector); // Uses the shared JComboBox
+        topPanel.setBackground(BG_COLOR);
+        JLabel selectLabel = new JLabel("Select Course:");
+        selectLabel.setForeground(TEXT_COLOR);
+        topPanel.add(selectLabel);
+        topPanel.add(courseSelector);
 
-        JButton viewButton = new JButton("View Results Summary");
-        JButton uploadButton = new JButton("Upload New Result");
+        JButton viewButton = createStyledButton("Refresh Results");
+        JButton uploadButton = createStyledButton("Upload New Result");
         topPanel.add(viewButton);
         topPanel.add(uploadButton);
 
         panel.add(topPanel, BorderLayout.NORTH);
         panel.add(new JScrollPane(resultsArea), BorderLayout.CENTER);
 
-        viewButton.addActionListener(e -> {
-            String selectedCourse = (String) courseSelector.getSelectedItem();
-            if (selectedCourse == null) return;
-            String courseId = selectedCourse.split(":")[0];
-            String report = DataManager.getTutorCourseResultsReport(courseId);
-            resultsArea.setText(report);
-            resultsArea.setCaretPosition(0);
-        });
-        
+        viewButton.addActionListener(e -> onCourseSelectionChange());
         uploadButton.addActionListener(e -> showUploadResultDialog());
-
+        
         return panel;
     }
 
-    // --- Panel for Viewing Students ---
     private JPanel createViewStudentsPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        topPanel.add(new JLabel("Select a course to view students:"));
-        // Use the shared courseSelector, DO NOT re-initialize it here
+        topPanel.setBackground(BG_COLOR);
+        JLabel selectLabel = new JLabel("Select a course to view students:");
+        selectLabel.setForeground(TEXT_COLOR);
+        topPanel.add(selectLabel);
         topPanel.add(courseSelector);
         
-        JList<String> studentList = new JList<>();
+        styleJList(studentList);
         studentList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-
-        // Add a single, shared action listener to the JComboBox
-        // This will update the student list whenever the selection changes
-        courseSelector.addActionListener(e -> {
-            String selectedCourse = (String) courseSelector.getSelectedItem();
-            if (selectedCourse != null) {
-                String courseId = selectedCourse.split(":")[0];
-                List<String> students = DataManager.getStudentsByCourse(courseId);
-                studentList.setListData(new Vector<>(students));
-            }
-        });
-
-        panel.add(topPanel, BorderLayout.NORTH);
-        panel.add(new JScrollPane(studentList), BorderLayout.CENTER);
         
+        JScrollPane scrollPane = new JScrollPane(studentList);
+        scrollPane.getViewport().setBackground(BG_COLOR);
+        scrollPane.setBorder(BorderFactory.createLineBorder(FIELD_BG_COLOR));
+        panel.add(topPanel, BorderLayout.NORTH);
+        panel.add(scrollPane, BorderLayout.CENTER);
         return panel;
     }
 
-    // --- Panel for Payroll ---
+
     private JPanel createPayrollPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
         JTextArea reportArea = new JTextArea("Select a month and year to generate your payroll report.");
         reportArea.setEditable(false);
         reportArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        reportArea.setBackground(FIELD_BG_COLOR);
+        reportArea.setForeground(TEXT_COLOR);
+        reportArea.setMargin(new Insets(10,10,10,10));
         panel.add(new JScrollPane(reportArea), BorderLayout.CENTER);
 
         JPanel controlsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        controlsPanel.setBackground(BG_COLOR);
         JComboBox<Integer> monthComboBox = new JComboBox<>();
         for (int i = 1; i <= 12; i++) monthComboBox.addItem(i);
-        
         JComboBox<Integer> yearComboBox = new JComboBox<>();
         int currentYear = LocalDate.now().getYear();
         for (int i = currentYear - 2; i <= currentYear; i++) yearComboBox.addItem(i);
-        
         monthComboBox.setSelectedItem(LocalDate.now().getMonthValue());
         yearComboBox.setSelectedItem(currentYear);
-        
-        JButton btnGenerate = new JButton("Generate My Payroll Report");
-        controlsPanel.add(new JLabel("Month:"));
+        JButton btnGenerate = createStyledButton("Generate My Payroll Report");
+        JLabel monthLabel = new JLabel("Month:"); monthLabel.setForeground(TEXT_COLOR);
+        JLabel yearLabel = new JLabel("Year:"); yearLabel.setForeground(TEXT_COLOR);
+        controlsPanel.add(monthLabel);
         controlsPanel.add(monthComboBox);
-        controlsPanel.add(new JLabel("Year:"));
+        controlsPanel.add(yearLabel);
         controlsPanel.add(yearComboBox);
         controlsPanel.add(btnGenerate);
-        
         panel.add(controlsPanel, BorderLayout.NORTH);
 
         btnGenerate.addActionListener(e -> {
@@ -205,62 +288,62 @@ public class TutorDashboard extends JFrame {
             reportArea.setText(report);
             reportArea.setCaretPosition(0);
         });
-        
         return panel;
     }
-    
-    // --- Panel for Profile Updates ---
+
     private JPanel createProfilePanel() {
         JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(10, 10, 10, 10);
 
         gbc.gridx = 0; gbc.gridy = 0;
-        panel.add(new JLabel("Full Name:"), gbc);
-        JTextField txtFullName = new JTextField(tutorUser.getFullName(), 20);
-        gbc.gridx = 1; panel.add(txtFullName, gbc);
+        JLabel nameLabel = new JLabel("Full Name:"); nameLabel.setForeground(TEXT_COLOR); panel.add(nameLabel, gbc);
+        JTextField txtFullName = new JTextField(tutorUser.getFullName(), 20); gbc.gridx = 1; panel.add(txtFullName, gbc);
 
         gbc.gridx = 0; gbc.gridy++;
-        panel.add(new JLabel("New Password (leave blank):"), gbc);
-        JPasswordField txtPassword = new JPasswordField(20);
-        gbc.gridx = 1; panel.add(txtPassword, gbc);
+        JLabel passLabel = new JLabel("New Password (leave blank):"); passLabel.setForeground(TEXT_COLOR); panel.add(passLabel, gbc);
+        JPasswordField txtPassword = new JPasswordField(20); gbc.gridx = 1; panel.add(txtPassword, gbc);
 
         gbc.gridx = 0; gbc.gridy++;
-        panel.add(new JLabel("Specialization(s):"), gbc);
-        JTextField txtSpecialization = new JTextField(tutorUser.getSpecialization(), 20);
-        gbc.gridx = 1; panel.add(txtSpecialization, gbc);
+        JLabel specLabel = new JLabel("Specialization(s):"); specLabel.setForeground(TEXT_COLOR); panel.add(specLabel, gbc);
+        JTextField txtSpecialization = new JTextField(tutorUser.getSpecialization(), 20); gbc.gridx = 1; panel.add(txtSpecialization, gbc);
 
         gbc.gridy++; gbc.gridx = 0;
         gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER;
-        JButton btnUpdate = new JButton("Update My Profile");
+        JButton btnUpdate = createStyledButton("Update My Profile");
         panel.add(btnUpdate, gbc);
 
         btnUpdate.addActionListener(e -> {
             String newFullName = txtFullName.getText().trim();
             String newPasswordStr = new String(txtPassword.getPassword());
             String newSpecialization = txtSpecialization.getText().trim();
-            
             String finalPassword = newPasswordStr.isEmpty() ? tutorUser.getPassword() : newPasswordStr;
-            
-            User updatedUser = new User(
-                tutorUser.getId(), tutorUser.getUsername(), finalPassword,
-                tutorUser.getRole(), newFullName, newSpecialization);
-
+            User updatedUser = new User(tutorUser.getId(), tutorUser.getUsername(), finalPassword, tutorUser.getRole(), newFullName, newSpecialization);
             if (DataManager.updateUser(updatedUser)) {
                 JOptionPane.showMessageDialog(this, "Profile updated successfully!");
                 this.tutorUser = updatedUser;
-                this.setTitle("Tutor Dashboard - Welcome, " + updatedUser.getFullName());
             } else {
                 JOptionPane.showMessageDialog(this, "Failed to update profile.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
-
         return panel;
     }
 
-    // --- Helper Methods and Dialogs ---
-    
+
+    private void refreshCourseData() {
+        refreshCourseTable();
+        refreshCourseSelector();
+        if (courseSelector.getItemCount() > 0) {
+            courseSelector.setSelectedIndex(0);
+        } else {
+            // If there are no courses, clear the dependent panels
+            studentList.setListData(new Vector<>());
+            resultsArea.setText("No courses available.");
+        }
+    }
+
     private void refreshCourseTable() {
         courseTableModel.setRowCount(0);
         List<String[]> courses = DataManager.getCoursesByTutor(tutorUser.getId());
@@ -276,26 +359,25 @@ public class TutorDashboard extends JFrame {
             courseSelector.addItem(courseData[0] + ": " + courseData[1]);
         }
     }
-
+    
     private void showAddCourseDialog() {
         JTextField nameField = new JTextField(20);
         JTextField levelField = new JTextField(20);
         JTextField subjectField = new JTextField(20);
         JTextField feeField = new JTextField(20);
-        JTextField scheduleField = new JTextField(20); // Field for schedule
+        JTextField scheduleField = new JTextField(20);
         
         JPanel panel = new JPanel(new GridLayout(0, 2, 5, 5));
         panel.add(new JLabel("Course Name:")); panel.add(nameField);
-        panel.add(new JLabel("Level (e.g., Primary 5):")); panel.add(levelField);
-        panel.add(new JLabel("Subject (e.g., Math):")); panel.add(subjectField);
-        panel.add(new JLabel("Fee (e.g., 200.00):")); panel.add(feeField);
-        panel.add(new JLabel("Schedule (e.g., Mon 4-6 PM):")); panel.add(scheduleField);
+        panel.add(new JLabel("Level:")); panel.add(levelField);
+        panel.add(new JLabel("Subject:")); panel.add(subjectField);
+        panel.add(new JLabel("Fee:")); panel.add(feeField);
+        panel.add(new JLabel("Schedule:")); panel.add(scheduleField);
 
         int result = JOptionPane.showConfirmDialog(this, panel, "Add New Course", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result == JOptionPane.OK_OPTION) {
             try {
                 double fee = Double.parseDouble(feeField.getText());
-                // Pass the schedule to the DataManager
                 if (DataManager.addCourse(nameField.getText(), tutorUser.getId(), levelField.getText(), subjectField.getText(), fee, scheduleField.getText())) {
                     JOptionPane.showMessageDialog(this, "Course added successfully!");
                     refreshCourseData();
@@ -303,7 +385,7 @@ public class TutorDashboard extends JFrame {
                     JOptionPane.showMessageDialog(this, "Failed to add course.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
             } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Invalid fee amount. Please enter a number.", "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Invalid fee amount.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -320,7 +402,7 @@ public class TutorDashboard extends JFrame {
         JTextField levelField = new JTextField((String) courseTableModel.getValueAt(selectedRow, 2), 20);
         JTextField subjectField = new JTextField((String) courseTableModel.getValueAt(selectedRow, 3), 20);
         JTextField feeField = new JTextField((String) courseTableModel.getValueAt(selectedRow, 4), 20);
-        // We need to fetch the schedule for the selected course to pre-fill the field
+        
         String currentSchedule = "";
         for (String[] course : DataManager.getCoursesByTutor(tutorUser.getId())) {
             if (course[0].equals(courseId) && course.length > 6) {
@@ -348,7 +430,7 @@ public class TutorDashboard extends JFrame {
                     JOptionPane.showMessageDialog(this, "Failed to update course.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
             } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Invalid fee amount. Please enter a number.", "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Invalid fee amount.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -373,71 +455,6 @@ public class TutorDashboard extends JFrame {
         }
     }
     
-    // --- CHAT SYSTEM METHODS ---
-    private void openChatDialog() {
-        User currentUser = this.tutorUser;
-
-        List<User> eligibleUsers = DataManager.getUsersForChat(currentUser);
-        if (eligibleUsers.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No other users available to chat with.", "Chat", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        User[] usersArray = eligibleUsers.toArray(new User[0]);
-        User selectedUser = (User) JOptionPane.showInputDialog(
-                this, "Select a user to chat with:", "Start a Chat",
-                JOptionPane.PLAIN_MESSAGE, null, usersArray, usersArray[0]);
-        if (selectedUser != null) {
-            ChatFrame chatFrame = new ChatFrame(currentUser, selectedUser);
-            chatFrame.addWindowListener(new java.awt.event.WindowAdapter() {
-                @Override
-                public void windowClosed(java.awt.event.WindowEvent windowEvent) {
-                    refreshChatNotification();
-                }
-            });
-            chatFrame.setVisible(true);
-        }
-    }
-    public void refreshChatNotification() {
-        User currentUser = this.tutorUser;
-        int unreadCount = DataManager.getUnreadMessageCount(currentUser); 
-        if (unreadCount > 0) {
-            btnChat.setText("Chat (" + unreadCount + ")");
-            btnChat.setForeground(Color.RED);
-            btnChat.setFont(new Font(btnChat.getFont().getName(), Font.BOLD, btnChat.getFont().getSize()));
-        } else {
-            btnChat.setText("Chat");
-            btnChat.setForeground(Color.BLACK);
-            btnChat.setFont(new Font(btnChat.getFont().getName(), Font.PLAIN, btnChat.getFont().getSize()));
-        }
-    }
-
-    // --- ANNOUNCEMENT SYSTEM METHODS ---
-    private void openAnnouncements() {
-        AnnouncementsFrame announcementsFrame = new AnnouncementsFrame(this.tutorUser);
-        announcementsFrame.addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosed(java.awt.event.WindowEvent windowEvent) {
-                refreshAnnouncementNotification();
-            }
-        });
-        announcementsFrame.setVisible(true);
-    }
-    public void refreshAnnouncementNotification() {
-        Set<String> readIds = DataManager.getReadAnnouncementIds(this.tutorUser);
-        List<Announcement> allAnnouncements = DataManager.getAllAnnouncements();
-        long unreadCount = allAnnouncements.stream().filter(a -> !readIds.contains(a.getId())).count();
-        if (unreadCount > 0) {
-            btnAnnouncements.setText("Announcements (" + unreadCount + ")");
-            btnAnnouncements.setForeground(Color.BLUE);
-            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.BOLD, btnAnnouncements.getFont().getSize()));
-        } else {
-            btnAnnouncements.setText("Announcements");
-            btnAnnouncements.setForeground(Color.BLACK);
-            btnAnnouncements.setFont(new Font(btnAnnouncements.getFont().getName(), Font.PLAIN, btnAnnouncements.getFont().getSize()));
-        }
-    }
-    
-    // --- UPLOAD RESULT DIALOG ---
     private void showUploadResultDialog() {
         String selectedCourseInfo = (String) courseSelector.getSelectedItem();
         if (selectedCourseInfo == null) {
@@ -489,7 +506,7 @@ public class TutorDashboard extends JFrame {
                 String enrollmentId = DataManager.getEnrollmentId(selectedStudent.getId(), courseId);
 
                 if (enrollmentId == null) {
-                     JOptionPane.showMessageDialog(this, "Error: Could not find a valid enrollment record for this student in this course.", "Error", JOptionPane.ERROR_MESSAGE);
+                     JOptionPane.showMessageDialog(this, "Error: Could not find a valid enrollment record.", "Error", JOptionPane.ERROR_MESSAGE);
                      return;
                 }
                 
@@ -502,5 +519,197 @@ public class TutorDashboard extends JFrame {
                 JOptionPane.showMessageDialog(this, "Score and Total Marks must be valid numbers.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+    
+    private void openChatDialog() {
+        // IMPORTANT: Ensure 'currentUser' is set to the correct user for the dashboard
+        // e.g., this.adminUser, this.receptionistUser, etc.
+        User currentUser = this.tutorUser; // Change this for each dashboard!
+
+        ChatInterfaceFrame chatInterface = new ChatInterfaceFrame(currentUser);
+        
+        // Add a listener to refresh notifications when the chat window is closed
+        chatInterface.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                refreshChatNotification();
+            }
+        });
+        
+        chatInterface.setVisible(true);
+    }
+    
+    public void refreshChatNotification() {
+        int unreadCount = DataManager.getUnreadMessageCount(this.tutorUser); 
+        if (unreadCount > 0) {
+            btnChat.setText("Chat (" + unreadCount + ")");
+            btnChat.setForeground(Color.RED);
+        } else {
+            btnChat.setText("Chat");
+            btnChat.setForeground(Color.WHITE);
+        }
+    }
+
+    private void openAnnouncements() {
+        AnnouncementsFrame announcementsFrame = new AnnouncementsFrame(this.tutorUser);
+        announcementsFrame.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent windowEvent) {
+                refreshAnnouncementNotification();
+            }
+        });
+        announcementsFrame.setVisible(true);
+    }
+    
+    public void refreshAnnouncementNotification() {
+        Set<String> readIds = DataManager.getReadAnnouncementIds(this.tutorUser);
+        long unreadCount = DataManager.getAllAnnouncements().stream().filter(a -> !readIds.contains(a.getId())).count();
+        if (unreadCount > 0) {
+            btnAnnouncements.setText("Announcements (" + unreadCount + ")");
+            btnAnnouncements.setForeground(Color.CYAN);
+        } else {
+            btnAnnouncements.setText("Announcements");
+            btnAnnouncements.setForeground(Color.WHITE);
+        }
+    }
+
+    private JButton createStyledButton(String text) {
+        JButton button = new JButton(text);
+        button.setBackground(PRIMARY_COLOR);
+        button.setForeground(Color.WHITE);
+        button.setFont(new Font("Arial", Font.BOLD, 14));
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createEmptyBorder(8, 18, 8, 18));
+        return button;
+    }
+    
+    private void styleTable(JTable table) {
+        table.setBackground(BG_COLOR);
+        table.setForeground(TEXT_COLOR);
+        table.setFont(new Font("Arial", Font.PLAIN, 14));
+        table.setGridColor(FIELD_BG_COLOR);
+        table.setRowHeight(25);
+        table.setSelectionBackground(PRIMARY_COLOR);
+        table.setSelectionForeground(Color.WHITE);
+        JTableHeader header = table.getTableHeader();
+        header.setBackground(FIELD_BG_COLOR);
+        header.setForeground(TEXT_COLOR);
+        header.setFont(new Font("Arial", Font.BOLD, 16));
+    }
+
+    private JPanel createWeeklyTimetablePanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 20));
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        String[] days = {"Time Slot", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"};
+        String[] timeSlots = {
+            "08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00",
+            "12:00-13:00",
+            "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00",
+            "17:00-18:00", "18:00-19:00", "19:00-20:00"
+        };
+
+        DefaultTableModel timetableModel = new DefaultTableModel(null, days) {
+            @Override public boolean isCellEditable(int row, int column) { return false; }
+        };
+        JTable timetableTable = new JTable(timetableModel);
+        styleTable(timetableTable);
+        timetableTable.setRowHeight(35);
+
+        Map<String, Map<String, String>> weeklyData = DataManager.getStoredTimetable();
+
+        for (String timeSlot : timeSlots) {
+            Object[] rowData = new Object[days.length];
+            rowData[0] = timeSlot;
+            if (timeSlot.equals("12:00-13:00")) {
+                for (int i = 1; i < days.length; i++) rowData[i] = "--- RECESS ---";
+            } else {
+                for (int i = 1; i < days.length; i++) {
+                    String day = days[i];
+                    String courseName = " ";
+                    if (weeklyData.containsKey(day)) {
+                        for (Map.Entry<String, String> entry : weeklyData.get(day).entrySet()) {
+                            if (entry.getKey().contains(timeSlot.split("-")[0])) {
+                                courseName = entry.getValue();
+                                break;
+                            }
+                        }
+                    }
+                    rowData[i] = courseName;
+                }
+            }
+            timetableModel.addRow(rowData);
+        }
+        
+        JScrollPane scrollPane = new JScrollPane(timetableTable);
+        scrollPane.getViewport().setBackground(BG_COLOR);
+        scrollPane.setBorder(BorderFactory.createLineBorder(FIELD_BG_COLOR));
+        panel.add(scrollPane, BorderLayout.CENTER);
+        
+        return panel;
+    }
+
+    private void populateTimetable(DefaultTableModel timetableModel) {
+    // This array now matches the format used by the generator in DataManager
+        String[] timeSlots = {
+            "08-09 AM", "09-10 AM", "10-11 AM", "11-12 PM", "12-01 PM", // Recess
+            "01-02 PM", "02-03 PM", "03-04 PM", "04-05 PM", "05-06 PM",
+            "06-07 PM", "07-08 PM"
+        };
+        String[] days = {"Time Slot", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"};
+        
+        // Map full day names to the abbreviations used in the file
+        Map<String, String> dayToAbbrMap = Map.of(
+            "Monday", "Mon", "Tuesday", "Tue", "Wednesday", "Wed", "Thursday", "Thu", "Friday", "Fri"
+        );
+        
+        timetableModel.setRowCount(0);
+        // --- KEY CHANGE: Use the new method to read the stored timetable ---
+        Map<String, Map<String, String>> weeklyData = DataManager.getStoredTimetable();
+
+        for (String timeSlot : timeSlots) {
+            Object[] rowData = new Object[days.length];
+            rowData[0] = timeSlot;
+            
+            if (timeSlot.equals("12-01 PM")) {
+                for (int i = 1; i < days.length; i++) rowData[i] = "--- RECESS ---";
+            } else {
+                for (int i = 1; i < days.length; i++) {
+                    String fullDayName = days[i];
+                    String dayAbbr = dayToAbbrMap.get(fullDayName);
+                    
+                    String cellContent = " ";
+                    if (weeklyData.containsKey(dayAbbr)) {
+                        // Direct lookup for the content at this specific day and time
+                        cellContent = weeklyData.get(dayAbbr).getOrDefault(timeSlot, " ");
+                    }
+                    rowData[i] = cellContent;
+                }
+            }
+            timetableModel.addRow(rowData);
+        }
+    }
+
+    private class CenterTableCellRenderer extends DefaultTableCellRenderer {
+        public CenterTableCellRenderer() {
+            setHorizontalAlignment(JLabel.CENTER);
+        }
+    }
+
+    private void styleJList(JList<String> list) {
+        list.setBackground(FIELD_BG_COLOR);
+        list.setForeground(TEXT_COLOR);
+        list.setFont(new Font("Arial", Font.PLAIN, 14));
+        list.setSelectionBackground(PRIMARY_COLOR);
+        list.setSelectionForeground(Color.WHITE);
+    }
+    
+    private void styleJTextArea(JTextArea textArea) {
+        textArea.setBackground(FIELD_BG_COLOR);
+        textArea.setForeground(TEXT_COLOR);
+        textArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        textArea.setMargin(new Insets(10,10,10,10));
+        textArea.setCaretColor(Color.WHITE);
     }
 }
