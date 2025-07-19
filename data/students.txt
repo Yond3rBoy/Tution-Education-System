@@ -1,1 +1,22 @@
 STU-401,Hendsemboi,stu,Dylan Lee Jian Fai
+STU-402, kimlynn, stu, Kim Lynn
+STU-403, maxwell12, stu, Maxwell Chan
+STU-404, jasontan, stu, Jason Tan Wei
+STU-405, sarahchoo, stu, Sarah Choo Mei
+STU-406, austinlee, stu, Austin Lee Wei
+STU-407, christine99, stu, Christine Lim
+STU-408, mark_wong, stu, Mark Wong Xin
+STU-409, aliceho, stu, Alice Ho Jun
+STU-410, benjaminlee, stu, Benjamin Lee
+STU-411, clairekoo, stu, Claire Koo
+STU-412, daniel_zhang, stu, Daniel Zhang Hao
+STU-413, elaine_ng, stu, Elaine Ng Xin
+STU-414, jasonfoo, stu, Jason Foo Xing
+STU-415, janetlu, stu, Janet Lu Li
+STU-416, andy88, stu, Andy Lim
+STU-417, victoria87, stu, Victoria Tan
+STU-418, jenniferkoh, stu, Jennifer Koh Yuen
+STU-419, nicholas_s, stu, Nicholas Sia
+STU-420, evawong, stu, Eva Wong Hui
+STU-421, michael_woo, stu, Michael Woo Jie
+STU-422,hibye, 123, NINI

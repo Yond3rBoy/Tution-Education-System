@@ -1,1 +1,3 @@
-REQ-001,STU-401,"Please drop Primary 5 Science and add Secondary 2 English.",PENDING,2023-10-27
+REQ-001,STU-401,Requesting enrollment for: C-102: Weekly English (General) - $150.00,Approved & Enrolled,2025-07-16
+REQ-002,STU-401,Requesting enrollment for: C-105: Weekly History (General) - $150.00,Approved & Enrolled,2025-07-16
+REQ-003,STU-422,Requesting enrollment for: C-103: Weekly Physics (General) - $150.00,PENDING,2025-07-19

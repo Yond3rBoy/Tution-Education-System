@@ -1,3 +1,5 @@
-C-101,Primary 5 Mathematics,TUT-301,Primary 5,Math,200.00,"Mon 4-6 PM"
-C-102,Primary 5 Science,TUT-302,Primary 5,Science,200.00,"Tue 5-7 PM"
-C-201,Secondary 2 English,TUT-303,Secondary 2,English,250.00,"Wed 6-8 PM"
+C-102,Weekly English,TUT-302,General,English,150.00,Fri 07-08 PM
+C-103,Weekly Physics,TUT-303,General,Physics,150.00,Wed 05-06 PM
+C-104,Weekly Science,TUT-301,General,Science,150.00,Thu 03-04 PM
+C-105,Weekly History,TUT-302,General,History,150.00,Mon 09-10 AM
+C-106,Weekly Math,TUT-301,General,Math,150.00,Tue 04-05 PM

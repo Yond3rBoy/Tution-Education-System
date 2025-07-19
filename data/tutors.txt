@@ -1,1 +1,3 @@
-TUT-301,tutor,tu,John Doe,"Primary Math;Secondary Science"
+TUT-301,tutor,tu,John Doe,Math;Science
+TUT-302,tutor_mary,mary123,Mary Jane,English;History
+TUT-303,tutor_pete,pete123,Peter Parker,Physics

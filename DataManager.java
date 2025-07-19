@@ -2,6 +2,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -9,28 +10,34 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class DataManager {
-
-    // --- FILE CONSTANTS ---
     // User files
     private static final String ADMINS_FILE = "data/admins.txt";
     private static final String TUTORS_FILE = "data/tutors.txt";
     private static final String RECEPTIONISTS_FILE = "data/receptionists.txt";
-    private static final String STUDENTS_FILE = "data/students.txt";
-    
+    private static final String STUDENTS_FILE = "data/students.txt";  
     // Data files
     private static final String STUDENT_DETAILS_FILE = "data/student_details.txt";
     private static final String COURSES_FILE = "data/courses.txt";
     private static final String ENROLLMENTS_FILE = "data/enrollments.txt";
-    private static final String PAYMENTS_FILE = "data.txt/payments";
+    private static final String PAYMENTS_FILE = "data/payments.txt";
     private static final String REQUESTS_FILE = "data/requests.txt";
     private static final String CHATS_FILE = "data/chats.txt";
     private static final String RESULTS_FILE = "data/results.txt";
     private static final String ANNOUNCEMENTS_FILE = "data/announcements.txt";
     private static final String READ_ANNOUNCEMENTS_FILE = "data/read_announcements.txt";
+    private static final String TIMETABLE_FILE = "data/timetable.txt";
+    private static final String GROUP_CHATS_FILE = "data/group_chats.txt";
+    private static final String ATTENDANCE_FILE = "data/attendance.txt";
+    private static final String FEEDBACK_FILE = "data/feedback.txt";
 
-
-
-    // --- CORE USER MANAGEMENT ---
+    public static final List<String> AVAILABLE_SUBJECTS = Arrays.asList(
+            "Mathematics", "Physics", "Additional Mathematics", "Chemistry",
+            "Biology", "Chinese", "Computer Science", "English",
+            "Bahasa Melayu", "History"
+    );
+    public static List<String> getAvailableSubjects() {
+        return AVAILABLE_SUBJECTS;
+    }
 
     public static User authenticateUser(String username, String password) {
         User user = findUserInFile(ADMINS_FILE, "Admin", username, password);
@@ -106,28 +113,34 @@ public class DataManager {
         }
     }
 
-    // --- ADMIN-SPECIFIC FUNCTIONS ---
+    public static boolean registerUser(String username, String password, String role, String fullName, List<String> specializations) {
+        String filePath = getFilePathForRole(role);
+        if (filePath == null) return false;
 
-    public static boolean registerUser(String username, String password, String role, String fullName, String specialization) {
+        if (isUsernameTaken(username)) {
+            System.err.println("Username '" + username + "' is already taken.");
+            return false;
+        }
+        
         try {
             String newUserId = getNextIdForRole(role);
             if (newUserId == null) return false;
 
-            String filePath = getFilePathForRole(role);
             String newUserLine;
 
-            // The core data string is created first
+            // ============================ THE FIX: PART 2 ============================
+            // This logic correctly handles the List<String> for Tutors.
             if ("Tutor".equalsIgnoreCase(role)) {
-                newUserLine = String.join(",", newUserId, username, password, fullName, specialization);
+                // Join the list of specializations with a semicolon.
+                String specializationString = String.join(";", specializations);
+                newUserLine = String.join(",", newUserId, username, password, fullName, specializationString);
             } else {
+                // For other roles, the specializations list is ignored.
                 newUserLine = String.join(",", newUserId, username, password, fullName);
             }
+            // ========================= END OF FIX ==========================
 
-            // We append the system's line separator to the data string
-            // This is more reliable than just "\n"
             String lineToWrite = newUserLine + System.lineSeparator();
-
-            // Write the full line (with the newline) to the file
             Files.write(Paths.get(filePath), lineToWrite.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             return true;
         } catch (IOException e) {
@@ -190,10 +203,7 @@ public class DataManager {
         }
         return report.toString();
     }
-    
-    // --- RECEPTIONIST-SPECIFIC FUNCTIONS ---
 
-    // In DataManager.java
     public static List<String> getAvailableCourses() {
         List<String> courses = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
@@ -213,18 +223,26 @@ public class DataManager {
     }
 
     public static boolean registerStudent(String fullName, String username, String password, String ic, String email, String contact, String address, List<String> courseIDs) {
+        // ... (check if username is taken, same as above) ...
+        if (isUsernameTaken(username)) {
+            System.err.println("Username '" + username + "' is already taken.");
+            return false;
+        }
+        
         String studentId = getNextIdForRole("Student");
-        String userLine = String.join(",", studentId, username, password, fullName);
+        // --- THE FIX ---
+        String userLine = String.join(",", studentId, username, password, fullName) + System.lineSeparator();
         try {
-            Files.write(Paths.get(STUDENTS_FILE), (userLine + "\n").getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            Files.write(Paths.get(STUDENTS_FILE), userLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
 
-        String detailsLine = String.join(",", studentId, ic, email, contact, address);
+        // --- THE FIX ---
+        String detailsLine = String.join(",", studentId, ic, email, contact, address) + System.lineSeparator();
         try {
-            Files.write(Paths.get(STUDENT_DETAILS_FILE), (detailsLine + "\n").getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            Files.write(Paths.get(STUDENT_DETAILS_FILE), detailsLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             e.printStackTrace();
             return false;
@@ -232,11 +250,12 @@ public class DataManager {
 
         for (String courseId : courseIDs) {
             String enrollmentId = getNextIdForPrefix("ENR-", ENROLLMENTS_FILE);
-            String enrollmentLine = String.join(",", enrollmentId, studentId, courseId);
+            String enrollmentLine = String.join(",", enrollmentId, studentId, courseId) + System.lineSeparator();
             try {
-                Files.write(Paths.get(ENROLLMENTS_FILE), (enrollmentLine + "\n").getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                Files.write(Paths.get(ENROLLMENTS_FILE), enrollmentLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             } catch (IOException e) {
                 e.printStackTrace();
+                return false;
             }
         }
         return true;
@@ -265,7 +284,7 @@ public class DataManager {
     public static String acceptPayment(String enrollmentId, double amount) {
         String paymentId = getNextIdForPrefix("PAY-", PAYMENTS_FILE);
         String paymentDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String paymentLine = String.join(",", paymentId, enrollmentId, String.valueOf(amount), paymentDate) + "\n";
+        String paymentLine = String.join(",", paymentId, enrollmentId, String.valueOf(amount), paymentDate) + System.lineSeparator();
         
         try {
             Files.write(Paths.get(PAYMENTS_FILE), paymentLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -288,9 +307,9 @@ public class DataManager {
 
         for (String courseId : newCourseIDs) {
             String enrollmentId = getNextIdForPrefix("ENR-", ENROLLMENTS_FILE);
-            String enrollmentLine = String.join(",", enrollmentId, studentId, courseId);
+            String enrollmentLine = String.join(",", enrollmentId, studentId, courseId) + System.lineSeparator();
             try {
-                Files.write(Paths.get(ENROLLMENTS_FILE), (enrollmentLine + "\n").getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                Files.write(Paths.get(ENROLLMENTS_FILE), enrollmentLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             } catch (IOException e) {
                 e.printStackTrace();
                 return false;
@@ -306,8 +325,6 @@ public class DataManager {
         if (!deleteLineByColumnValue(ENROLLMENTS_FILE, studentId, 1)) success = false;
         return success;
     }
-
-    // --- TUTOR SPECIFIC FUNCTION ---
 
      public static List<String[]> getCoursesByTutor(String tutorId) {
         List<String[]> courses = new ArrayList<>();
@@ -327,12 +344,8 @@ public class DataManager {
     public static boolean addCourse(String courseName, String tutorId, String level, String subject, double fee, String schedule) {
         try {
             String courseId = getNextIdForPrefix("C-", COURSES_FILE, 101);
-            
-            // CHANGE THIS:
-            // String courseLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee)) + "\n";
-            
-            // TO THIS (add the schedule to the line being saved):
-            String courseLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee), schedule) + "\n";
+
+            String courseLine = String.join(",", courseId, courseName, tutorId, level, subject, String.format("%.2f", fee), schedule) + System.lineSeparator();
             
             Files.write(Paths.get(COURSES_FILE), courseLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             return true;
@@ -412,8 +425,6 @@ public class DataManager {
         return studentNames;
     }
 
-    // --- STUDENT-SPECIFIC FUNCTIONS ---
-
     public static List<String> getStudentSchedule(String studentId) {
         List<String> schedule = new ArrayList<>();
         List<String> courseIDs = new ArrayList<>();
@@ -450,7 +461,7 @@ public class DataManager {
         String date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
         String status = "PENDING";
         
-        String requestLine = String.join(",", requestId, studentId, details, status, date) + "\n";
+        String requestLine = String.join(",", requestId, studentId, details, status, date) + System.lineSeparator();
         
         try {
             Files.write(Paths.get(REQUESTS_FILE), requestLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -553,128 +564,129 @@ public class DataManager {
         return status;
     }
 
-    // --- CHAT SYSTEM FUNCTIONS ---
-
-    public static boolean sendMessage(User sender, User receiver, String content) {
-        String messageId = getNextIdForPrefix("MSG-", CHATS_FILE);
-        // Use a sortable timestamp format
-        String timestamp = LocalDateTime.now().toString(); 
+    public static void sendMessage(String senderUsername, String recipientUsername, String content) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String escapedContent = content.replace(",", ";").replace("\n", " | ");
         String status = "UNREAD";
-        
-        // IMPORTANT: We must escape commas in the user-generated content to not break our CSV
-        String escapedContent = content.replace(",", ";"); 
-
-        String messageLine = String.join(",", messageId, sender.getUsername(), receiver.getUsername(), timestamp, status, escapedContent) + "\n";
-        
+        String messageLine = String.join(",", senderUsername, recipientUsername, escapedContent, timestamp, status) + System.lineSeparator();
         try {
             Files.write(Paths.get(CHATS_FILE), messageLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            return true;
         } catch (IOException e) {
             e.printStackTrace();
-            return false;
         }
     }
 
-    public static List<String> getConversation(User user1, User user2) {
-        List<String> conversation = new ArrayList<>();
-        String u1 = user1.getUsername();
-        String u2 = user2.getUsername();
 
+    public static List<Message> getConversation(String user1Username, String user2Username) {
+        List<Message> conversation = new ArrayList<>();
+        if (!Files.exists(Paths.get(CHATS_FILE))) {
+            return conversation;
+        }
         try (BufferedReader reader = new BufferedReader(new FileReader(CHATS_FILE))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] data = line.split(",", 6);
-                if (data.length < 6) continue;
-
-                String sender = data[1];
-                String receiver = data[2];
-
-                // Check if the message is between the two users
-                if ((sender.equals(u1) && receiver.equals(u2)) || (sender.equals(u2) && receiver.equals(u1))) {
-                    // Format for display: "Timestamp,Sender,Message"
-                    // Un-escape the message content before adding it
-                    String unescapedContent = data[5].replace(";", ",");
-                    conversation.add(data[3] + "," + sender + "," + unescapedContent);
+                String[] data = line.split(",", 5);
+                if (data.length < 5) continue;
+                String sender = data[0];
+                String receiver = data[1];
+                if ((sender.equals(user1Username) && receiver.equals(user2Username)) ||
+                        (sender.equals(user2Username) && receiver.equals(user1Username))) {
+                    String content = data[2].replace(";", ",").replace(" | ", "\n");
+                    LocalDateTime timestamp = LocalDateTime.parse(data[3]);
+                    boolean isRead = "READ".equalsIgnoreCase(data[4]);
+                    conversation.add(new Message(sender, receiver, content, timestamp, isRead));
                 }
             }
-        } catch (IOException e) { /* ignore */ }
-        
-        // Sort the conversation by timestamp
-        conversation.sort(Comparator.comparing(line -> LocalDateTime.parse(line.split(",")[0])));
-        
+        } catch (IOException | java.time.format.DateTimeParseException e) {
+            System.err.println("Error reading or parsing conversation: " + e.getMessage());
+        }
+        conversation.sort(Comparator.comparing(Message::getTimestamp));
         return conversation;
     }
     
-    public static void markMessagesAsRead(User viewer, User otherUser) {
+    public static void markMessagesAsRead(User reader, User sender) {
+        if (sender == null) return;
+        if (!Files.exists(Paths.get(CHATS_FILE))) return;
         List<String> updatedLines = new ArrayList<>();
+        boolean modified = false;
+
         try {
             List<String> allLines = Files.readAllLines(Paths.get(CHATS_FILE));
             for (String line : allLines) {
-                String[] data = line.split(",", 6);
-                if (data.length < 6) {
+                String[] data = line.split(",", 5);
+                if (data.length < 5) {
                     updatedLines.add(line);
                     continue;
                 }
-                // Mark messages as read where the viewer is the receiver and the other user is the sender
-                if (data[2].equals(viewer.getUsername()) && data[1].equals(otherUser.getUsername())) {
-                    data[4] = "READ"; // Change status from UNREAD to READ
+                // THE FIX: Check data[1] (recipient) and data[0] (sender)
+                if (data[1].equals(reader.getUsername()) && data[0].equals(sender.getUsername()) && "UNREAD".equalsIgnoreCase(data[4])) {
+                    data[4] = "READ"; // Update status
                     updatedLines.add(String.join(",", data));
+                    modified = true;
                 } else {
                     updatedLines.add(line);
                 }
             }
-            Files.write(Paths.get(CHATS_FILE), updatedLines);
+            if (modified) {
+                Files.write(Paths.get(CHATS_FILE), updatedLines);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     public static int getUnreadMessageCount(User currentUser) {
-        int count = 0;
-        try (BufferedReader reader = new BufferedReader(new FileReader(CHATS_FILE))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] data = line.split(",", 6);
-                if (data.length < 6) continue;
-                // Count if the current user is the receiver and status is UNREAD
-                if (data[2].equals(currentUser.getUsername()) && data[4].equalsIgnoreCase("UNREAD")) {
-                    count++;
-                }
-            }
-        } catch (IOException e) { /* ignore */ }
-        return count;
+        if (!Files.exists(Paths.get(CHATS_FILE))) return 0;
+        try {
+            return (int) Files.lines(Paths.get(CHATS_FILE))
+                .map(line -> line.split(",", 5))
+                // THE FIX: Check data[1] (recipient) for the current user's name
+                .filter(data -> data.length >= 5 && data[1].equals(currentUser.getUsername()) && "UNREAD".equalsIgnoreCase(data[4]))
+                .count();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return 0;
+        }
     }
+
 
     public static List<User> getUsersForChat(User currentUser) {
         List<User> allUsers = new ArrayList<>();
         allUsers.addAll(getAllUsersByRole("Admin"));
-        allUsers.addAll(getAllUsersByRole("Receptionist"));
         allUsers.addAll(getAllUsersByRole("Tutor"));
+        allUsers.addAll(getAllUsersByRole("Receptionist"));
         allUsers.addAll(getAllUsersByRole("Student"));
 
         List<User> eligibleUsers = new ArrayList<>();
         String currentUserRole = currentUser.getRole();
 
+        // 2. Loop through every user and apply the communication rules.
         for (User otherUser : allUsers) {
-            // A user cannot chat with themselves
+            // Rule: A user cannot chat with themselves.
             if (otherUser.getUsername().equals(currentUser.getUsername())) {
-                continue;
+                continue; // Skip to the next user in the loop
             }
 
             String otherUserRole = otherUser.getRole();
             
-            // Apply communication rules
-            boolean isBlocked = (currentUserRole.equals("Admin") && otherUserRole.equals("Student")) ||
-                                (currentUserRole.equals("Student") && otherUserRole.equals("Admin"));
-            
-            if (!isBlocked) {
-                eligibleUsers.add(otherUser);
+            // --- THE CRITICAL SECURITY CHECK ---
+
+            // Rule: If the current user is an Admin, they cannot chat with Students.
+            if (currentUserRole.equals("Admin") && otherUserRole.equals("Student")) {
+                continue; // Skip this user
             }
+            
+            // Rule: If the current user is a Student, they cannot chat with Admins.
+            if (currentUserRole.equals("Student") && otherUserRole.equals("Admin")) {
+                continue; // Skip this user
+            }
+
+            // 3. If no rules were broken, the user is eligible to be chatted with.
+            eligibleUsers.add(otherUser);
         }
+        
         return eligibleUsers;
     }
-
-    // --- HELPER METHODS ---
 
     private static String getFilePathForRole(String role) {
         switch (role) {
@@ -749,19 +761,16 @@ public class DataManager {
         if (!Files.exists(Paths.get(ENROLLMENTS_FILE))) return null;
         return Files.lines(Paths.get(ENROLLMENTS_FILE)).map(line -> line.split(",")).filter(data -> data.length > 2 && data[0].equals(enrollmentId)).map(data -> data[2]).findFirst().orElse(null);
     }
-    
-    // In DataManager.java
+
     private static String[] findCourseDetails(String courseId) throws IOException {
         if (!Files.exists(Paths.get(COURSES_FILE))) return null;
         return Files.lines(Paths.get(COURSES_FILE))
-                // CHANGE THIS:
-                .map(line -> line.split(",", 7)) // Was split(",", 6)
+                .map(line -> line.split(",", 7))
                 .filter(data -> data.length > 0 && data[0].equals(courseId))
                 .map(data -> new String[]{data[3], data[4]})
                 .findFirst().orElse(null);
     }
 
-    // In DataManager.java
     public static String getCourseInfoById(String courseId) {
         try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
             String line;
@@ -776,15 +785,12 @@ public class DataManager {
         } catch (IOException e) { /* ignore */ }
         return "Unknown Course";
     }
-     // --- RESULTS SYSTEM FUNCTIONS ---
 
-    // For Tutors: To upload a result for a student in one of their courses.
     public static boolean uploadResult(String enrollmentId, String assessmentName, int score, int totalMarks) {
         String resultId = getNextIdForPrefix("RES-", RESULTS_FILE);
         String uploadDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
 
-        String resultLine = String.join(",", resultId, enrollmentId, assessmentName, String.valueOf(score), String.valueOf(totalMarks), uploadDate) + "\n";
-        
+        String resultLine = String.join(",", resultId, enrollmentId, assessmentName, String.valueOf(score), String.valueOf(totalMarks), uploadDate) + System.lineSeparator();
         try {
             Files.write(Paths.get(RESULTS_FILE), resultLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             return true;
@@ -794,7 +800,6 @@ public class DataManager {
         }
     }
 
-    // A private helper to get all raw result data for a specific enrollment
     private static List<String[]> getRawResultsForEnrollment(String enrollmentId) {
         List<String[]> results = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(RESULTS_FILE))) {
@@ -809,7 +814,6 @@ public class DataManager {
         return results;
     }
 
-    // A private helper to calculate average and grade from raw results
     private static Map<String, Object> calculateMetrics(List<String[]> rawResults) {
         Map<String, Object> metrics = new HashMap<>();
         double totalScore = 0;
@@ -837,8 +841,7 @@ public class DataManager {
         metrics.put("details", rawResults); // Include the raw data for detailed view
         return metrics;
     }
-    
-    // For Students and Admins: Get a formatted report for a single student
+
     public static String getStudentResultsReport(String studentId) {
         StringBuilder report = new StringBuilder();
         Map<String, String> enrollments = getStudentEnrollments(studentId); // Map<EnrollmentID, CourseInfo>
@@ -873,7 +876,6 @@ public class DataManager {
         return report.toString();
     }
 
-    // For Tutors: Get a summary report for all students in one of their courses
     public static String getTutorCourseResultsReport(String courseId) {
         StringBuilder report = new StringBuilder();
         List<String> studentIDs = new ArrayList<>();
@@ -929,7 +931,7 @@ public class DataManager {
         String escapedTitle = title.replace(",", ";");
         String escapedContent = content.replace(",", ";");
 
-        String line = String.join(",", announcementId, escapedTitle, escapedContent, author.getUsername(), date) + "\n";
+        String line = String.join(",", announcementId, escapedTitle, escapedContent, author.getUsername(), date) + System.lineSeparator();
         try {
             Files.write(Paths.get(ANNOUNCEMENTS_FILE), line.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             return true;
@@ -979,7 +981,7 @@ public class DataManager {
             return; // Already read
         }
         
-        String line = user.getUsername() + "," + announcementId + "\n";
+        String line = user.getUsername() + "," + announcementId + System.lineSeparator();
         try {
             Files.write(Paths.get(READ_ANNOUNCEMENTS_FILE), line.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
@@ -1002,7 +1004,6 @@ public class DataManager {
         return requests;
     }
 
-    // For Receptionist: Update the status of a request after handling it.
     public static boolean updateRequestStatus(String requestId, String newStatus) {
         File inputFile = new File(REQUESTS_FILE);
         if (!inputFile.exists()) return false;
@@ -1054,20 +1055,19 @@ public class DataManager {
         return courseIDs;
     }
 
-     public static String getEnrollmentId(String studentId, String courseId) {
+    public static String getEnrollmentId(String studentId, String courseId) {
         try (BufferedReader reader = new BufferedReader(new FileReader(ENROLLMENTS_FILE))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] data = line.split(",");
-                // Check if column 1 is the studentID AND column 2 is the courseID
                 if (data.length == 3 && data[1].equals(studentId) && data[2].equals(courseId)) {
-                    return data[0]; // Return the enrollmentID from column 0
+                    return data[0];
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return null; // Return null if no matching enrollment is found
+        return null;
     }
 
     public static String generateTutorPayrollReport(String tutorId, int month, int year) {
@@ -1141,26 +1141,1181 @@ public class DataManager {
         return report.toString();
     }
 
-    // Add this new method to DataManager.java
-
-    // Checks if a username exists in any of the user role files.
     public static boolean isUsernameValid(String username) {
-        // List all user files to check
+
         List<String> userFiles = Arrays.asList(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
 
         for (String filePath : userFiles) {
             try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    String[] data = line.split(",", 2); // Split only once to get the username efficiently
+                    String[] data = line.split(",", 2);
                     if (data.length > 1 && data[1].startsWith(username + ",")) {
-                        return true; // Found the username, no need to check further
+                        return true;
                     }
                 }
             } catch (IOException e) {
-                // Ignore if a file doesn't exist, just move to the next one
+
             }
         }
-        return false; // Did not find the username in any file
+        return false;
+    }
+
+    public static boolean deleteAnnouncement(String announcementId, User currentUser) {
+        File inputFile = new File(ANNOUNCEMENTS_FILE);
+        if (!inputFile.exists()) return false;
+        
+        File tempFile = new File(ANNOUNCEMENTS_FILE + ".tmp");
+        boolean deleted = false;
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+             BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 5);
+                if (data.length == 5 && data[0].equals(announcementId) && data[3].equals(currentUser.getUsername())) {
+                    deleted = true;
+                    continue;
+                }
+                writer.write(line + System.lineSeparator());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if (deleted) {
+            inputFile.delete();
+            tempFile.renameTo(inputFile);
+        } else {
+            tempFile.delete();
+        }
+        return deleted;
+    }
+
+    public static boolean updateAnnouncement(String announcementId, String newTitle, String newContent, User currentUser) {
+        File inputFile = new File(ANNOUNCEMENTS_FILE);
+        if (!inputFile.exists()) return false;
+
+        List<String> outLines = new ArrayList<>();
+        boolean updated = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 5);
+                // Security Check: Only update if the ID and author match.
+                if (data.length == 5 && data[0].equals(announcementId) && data[3].equals(currentUser.getUsername())) {
+                    // Re-escape commas in the new content before saving.
+                    String escapedTitle = newTitle.replace(",", ";");
+                    String escapedContent = newContent.replace(",", ";");
+                    
+                    // Reconstruct the line with the new data, keeping original ID, author, and date.
+                    String updatedLine = String.join(",", data[0], escapedTitle, escapedContent, data[3], data[4]);
+                    outLines.add(updatedLine);
+                    updated = true;
+                } else {
+                    outLines.add(line);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if (updated) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(inputFile, false))) { // false to overwrite the file
+                for (String outLine : outLines) {
+                    writer.write(outLine + System.lineSeparator());
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+        return updated;
+    }
+
+    public static boolean generateAndAssignTimetable() {
+        System.out.println("Starting 4-week intelligent timetable generation...");
+
+        // Step 1: Get all tutors and their specializations (same as before)
+        Map<String, List<String>> subjectToTutorIds = new HashMap<>();
+        Map<String, String> tutorIdToNameMap = new HashMap<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(TUTORS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                if (data.length < 5 || data[4].trim().isEmpty()) continue;
+                String tutorId = data[0].trim();
+                String tutorName = data[3].trim();
+                tutorIdToNameMap.put(tutorId, tutorName);
+                // Specializations are stored separated by semicolons
+                String[] specializations = data[4].split(";");
+                for (String subject : specializations) {
+                    String trimmedSubject = subject.trim();
+                    if (!trimmedSubject.isEmpty()) {
+                        subjectToTutorIds.computeIfAbsent(trimmedSubject, k -> new ArrayList<>()).add(tutorId);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if (subjectToTutorIds.isEmpty()) {
+            System.err.println("CRITICAL: No teachable subjects found. Check tutor specializations in tutors.txt.");
+            return false;
+        }
+
+        // Step 2: Define available time slots and other setup
+        String[] timeSlots = {"09-10 AM", "10-11 AM", "11-12 PM", "02-03 PM", "03-04 PM", "04-05 PM", "05-06 PM"};
+        List<DayOfWeek> weekdays = List.of(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY);
+        Random random = new Random();
+        List<String> newTimetableLines = new ArrayList<>();
+        
+        // Set the starting point to the Monday of the current week
+        LocalDate weekStart = LocalDate.now().with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+
+        // Step 3: Loop for 4 weeks to generate the schedule
+        for (int week = 0; week < 4; week++) {
+            System.out.println("\n--- Processing Week " + (week + 1) + " (starting: " + weekStart + ") ---");
+            
+            // Data structures for the weekly generation. These are reset each week.
+            Map<LocalDate, List<String>> availableSlotsPerDay = new LinkedHashMap<>();
+            
+            // Initialize available slots for the current week
+            for (DayOfWeek day : weekdays) {
+                availableSlotsPerDay.put(weekStart.with(day), new ArrayList<>(List.of(timeSlots)));
+            }
+
+            // Get the list of all unique subjects to be scheduled this week
+            List<String> subjectsToSchedule = new ArrayList<>(subjectToTutorIds.keySet());
+            Collections.shuffle(subjectsToSchedule);
+
+            // This is the main scheduling logic for one week
+            for (String subject : subjectsToSchedule) {
+                boolean scheduledThisWeek = false;
+                // Shuffle the days to ensure subjects are not always on the same day of the week
+                List<LocalDate> shuffledDays = new ArrayList<>(availableSlotsPerDay.keySet());
+                Collections.shuffle(shuffledDays);
+
+                for (LocalDate day : shuffledDays) {
+                    List<String> slotsOnDay = availableSlotsPerDay.get(day);
+                    if (!slotsOnDay.isEmpty()) {
+                        // Pick a random available slot on this day
+                        String timeSlot = slotsOnDay.remove(random.nextInt(slotsOnDay.size()));
+
+                        // Assign a random qualified tutor
+                        List<String> qualifiedTutors = subjectToTutorIds.get(subject);
+                        String tutorId = qualifiedTutors.get(random.nextInt(qualifiedTutors.size()));
+                        String tutorName = tutorIdToNameMap.get(tutorId);
+                        
+                        // Create the timetable entry line
+                        String timetableLine = String.join(",", day.toString(), timeSlot, "Weekly " + subject, tutorName);
+                        newTimetableLines.add(timetableLine);
+                        
+                        System.out.println("  [OK] Scheduled '" + subject + "' on " + day.getDayOfWeek() + " at " + timeSlot);
+                        scheduledThisWeek = true;
+                        break; // Move to the next subject once this one is scheduled for the week
+                    }
+                }
+
+                if (!scheduledThisWeek) {
+                    System.out.println("  [WARN] Could not find a slot for '" + subject + "' in the week of " + weekStart + ". There may be more subjects than available slots.");
+                }
+            }
+            
+            // Move to the next week for the next iteration of the loop
+            weekStart = weekStart.plusWeeks(1);
+        }
+
+
+        // Step 4: Write the generated timetable to the file, overwriting the old one
+        System.out.println("\nFinished generating 4-week timetable. Writing to file...");
+        try {
+            Files.write(Paths.get(TIMETABLE_FILE), newTimetableLines, 
+                    java.nio.file.StandardOpenOption.CREATE, 
+                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            System.out.println("Timetable generated and saved successfully.");
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+
+
+
+    public static Map<LocalDate, List<String[]>> getStoredTimetable() {
+        // New structure: Map<Date, List<[Time, Subject, Tutor]>>
+        Map<LocalDate, List<String[]>> weeklyTimetable = new TreeMap<>(); // TreeMap to keep dates sorted
+
+        if (!Files.exists(Paths.get(TIMETABLE_FILE))) {
+            return weeklyTimetable;
+        }
+        
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(TIMETABLE_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 4);
+                if (data.length < 4) continue;
+
+                try {
+                    LocalDate date = LocalDate.parse(data[0], formatter);
+                    String timeSlot = data[1];
+                    String subject = data[2];
+                    String tutor = data[3];
+
+                    weeklyTimetable.computeIfAbsent(date, k -> new ArrayList<>())
+                                .add(new String[]{timeSlot, subject, tutor});
+                } catch (Exception e) {
+                    System.err.println("Skipping malformed timetable line: " + line);
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("timetable.txt not found or is empty.");
+        }
+
+        // Sort classes within each day by time
+        for (List<String[]> dailyClasses : weeklyTimetable.values()) {
+            dailyClasses.sort(Comparator.comparing(c -> c[0]));
+        }
+
+        return weeklyTimetable;
+    }
+
+    public static List<String[]> getStudentPaymentHistory(String studentId) {
+        List<String[]> paymentHistory = new ArrayList<>();
+
+        Set<String> enrollmentIDs = getStudentEnrollments(studentId).keySet();
+        if (enrollmentIDs.isEmpty()) {
+            return paymentHistory;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(PAYMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] pData = line.split(",");
+                if (pData.length < 4) continue;
+
+                String enrollmentIdFromFile = pData[1];
+                
+                if (enrollmentIDs.contains(enrollmentIdFromFile)) {
+                    String paymentId = pData[0];
+                    String paymentDate = pData[3];
+                    String amount = pData[2];
+                    
+                    String courseName = "Unknown Course";
+                    String courseInfo = getStudentEnrollments(studentId).get(enrollmentIdFromFile);
+                    if (courseInfo != null) {
+                        courseName = courseInfo.split(" \\(")[0];
+                    }
+                    
+                    paymentHistory.add(new String[]{paymentId, paymentDate, courseName, amount});
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        
+        paymentHistory.sort((p1, p2) -> p2[1].compareTo(p1[1]));
+        
+        return paymentHistory;
+    }
+
+    public static Map<String, Double> getEnrollmentPaymentStatus(String enrollmentId) {
+        Map<String, Double> status = new HashMap<>();
+        double courseFee = 0.0;
+        double totalPaid = 0.0;
+        String courseId = null;
+        try (BufferedReader reader = new BufferedReader(new FileReader(ENROLLMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                if (data.length == 3 && data[0].equals(enrollmentId)) {
+                    courseId = data[2];
+                    break;
+                }
+            }
+        } catch (IOException e) { e.printStackTrace(); }
+
+        if (courseId != null) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(COURSES_FILE))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] data = line.split(",", 7);
+                    if (data.length >= 6 && data[0].equals(courseId)) {
+                        courseFee = Double.parseDouble(data[5]);
+                        break;
+                    }
+                }
+            } catch (IOException | NumberFormatException e) { e.printStackTrace(); }
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(PAYMENTS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",");
+                if (data.length == 4 && data[1].equals(enrollmentId)) {
+                    totalPaid += Double.parseDouble(data[2]);
+                }
+            }
+        } catch (IOException | NumberFormatException e) { e.printStackTrace(); }
+        
+        status.put("fee", courseFee);
+        status.put("paid", totalPaid);
+        status.put("balance", courseFee - totalPaid);
+        return status;
+    }
+
+    public static List<String[]> getStudentScheduleForTable(String studentId) {
+        List<String[]> scheduleData = new ArrayList<>();
+        Set<String> courseIDs = getStudentCourseIDs(studentId);
+        if (courseIDs.isEmpty()) {
+            return scheduleData;
+        }
+
+        for (String courseId : courseIDs) {
+            try {
+                String[] courseDetails = Files.lines(Paths.get(COURSES_FILE))
+                    .map(line -> line.split(",", 7))
+                    .filter(data -> data.length >= 7 && data[0].equals(courseId))
+                    .findFirst().orElse(null);
+                
+                if (courseDetails != null) {
+                    String courseName = courseDetails[1];
+                    String tutorId = courseDetails[2];
+                    String schedule = courseDetails[6];
+                    User tutorUser = getUserById(tutorId);
+                    if (tutorUser != null) {
+                        String tutorName = tutorUser.getFullName();
+                        scheduleData.add(new String[]{courseName, tutorName, schedule});
+                    } else {
+                        System.err.println("Warning: Tutor with ID '" + tutorId + "' for course '" + courseName + "' not found. Skipping course in schedule view.");
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return scheduleData;
+    }
+
+    public static User getUserById(String userId) {
+        List<String> userFiles = List.of(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
+        for (String file : userFiles) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] data = line.split(",");
+                    if (data.length > 0 && data[0].equals(userId)) {
+                        return new User(data[0], data[1], "", "", data[3], "");
+                    }
+                }
+            } catch (IOException e) {}
+        }
+        return null;
+    }
+
+    public static String[] getChatFilterRolesForUser(User currentUser) {
+        List<String> masterRoleOrder = List.of("Admin", "Receptionist", "Tutor", "Student");
+        List<String> finalRoles = new ArrayList<>();
+        
+        // "All Roles" and "Groups" are always available options.
+        finalRoles.add("All Chats");
+        finalRoles.add("Groups"); 
+
+        String currentUserRole = currentUser.getRole();
+
+        // Loop through the master list and add roles based on security rules.
+        for (String role : masterRoleOrder) {
+            // Rule: Admins cannot see "Student" in the filter list.
+            if (currentUserRole.equals("Admin") && role.equals("Student")) {
+                continue;
+            }
+            // Rule: Students cannot see "Admin" in the filter list.
+            if (currentUserRole.equals("Student") && role.equals("Admin")) {
+                continue;
+            }
+            finalRoles.add(role);
+        }
+        
+        return finalRoles.toArray(new String[0]);
+    }
+
+    public static int getUnreadMessageCountFromSender(User receiver, User sender) {
+        int count = 0;
+        try (BufferedReader reader = new BufferedReader(new FileReader(CHATS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 6);
+                if (data.length < 6) continue;
+                if (data[2].equals(receiver.getUsername()) && 
+                    data[1].equals(sender.getUsername()) && 
+                    data[4].equalsIgnoreCase("UNREAD")) {
+                    count++;
+                }
+            }
+        } catch (IOException e) {}
+        return count;
+    }
+
+    public static boolean isUsernameTaken(String username) {
+        List<String> userFiles = List.of(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
+        for (String file : userFiles) {
+            try {
+                if (Files.exists(Paths.get(file))) {
+                    boolean found = Files.lines(Paths.get(file))
+                                        .anyMatch(line -> line.split(",")[1].equals(username));
+                    if (found) return true;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return false;
+    }
+
+    public static String generateYearlyIncomeReport(int year) {
+        Map<String, Double> incomeBySubject = new HashMap<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        double totalIncome = 0;
+
+        try {
+            if (!Files.exists(Paths.get(PAYMENTS_FILE))) {
+                return "No payment data found.";
+            }
+            List<String> payments = Files.readAllLines(Paths.get(PAYMENTS_FILE));
+            for (String paymentLine : payments) {
+                String[] pData = paymentLine.split(",");
+                if (pData.length < 4) continue;
+                
+                LocalDate paymentDate = LocalDate.parse(pData[3], formatter);
+                if (paymentDate.getYear() == year) { // Check only the year
+                    String enrollmentId = pData[1];
+                    double amount = Double.parseDouble(pData[2]);
+                    totalIncome += amount;
+
+                    String courseId = findCourseIdForEnrollment(enrollmentId);
+                    if (courseId != null) {
+                        // findCourseDetails returns [level, subject]
+                        String[] courseDetails = findCourseDetails(courseId);
+                        if (courseDetails != null) {
+                            String subject = courseDetails[1];
+                            incomeBySubject.merge(subject, amount, Double::sum);
+                        }
+                    }
+                }
+            }
+        } catch (IOException | java.time.format.DateTimeParseException e) {
+            return "Error reading data files or parsing date: " + e.getMessage();
+        }
+
+        StringBuilder report = new StringBuilder();
+        report.append("==================================================\n");
+        report.append("          Yearly Income Report for ").append(year).append("\n");
+        report.append("==================================================\n\n");
+        
+        if (incomeBySubject.isEmpty()) {
+            report.append("No income recorded for this period.\n");
+        } else {
+            report.append("--- Income Breakdown by Subject ---\n\n");
+            // Sort subjects alphabetically for a clean report
+            List<String> sortedSubjects = new ArrayList<>(incomeBySubject.keySet());
+            Collections.sort(sortedSubjects);
+
+            for (String subject : sortedSubjects) {
+                report.append(String.format("  - Subject: %-20s | Income: $%.2f\n", subject, incomeBySubject.get(subject)));
+            }
+            
+            report.append("\n--------------------------------------------------\n");
+            report.append(String.format("   TOTAL YEARLY INCOME: $%.2f\n", totalIncome));
+            report.append("--------------------------------------------------\n");
+        }
+        
+        return report.toString();
+    }
+
+    public static boolean createGroupChat(String groupName, User creator, Set<User> members) {
+        String groupId = getNextIdForPrefix("GRP-", GROUP_CHATS_FILE);
+        String creatorUsername = creator.getUsername();
+        
+        // The creator is always a member.
+        members.add(creator);
+        String memberUsernames = members.stream()
+                                        .map(User::getUsername)
+                                        .collect(Collectors.joining(";"));
+
+        // Format: GroupID,GroupName,CreatorUsername,Member1;Member2;...
+        String line = String.join(",", groupId, groupName, creatorUsername, memberUsernames) + System.lineSeparator();
+        
+        try {
+            Files.write(Paths.get(GROUP_CHATS_FILE), line.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static List<GroupChat> getGroupChatsForUser(User user) {
+        List<GroupChat> groups = new ArrayList<>();
+        if (!Files.exists(Paths.get(GROUP_CHATS_FILE))) {
+            return groups;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(GROUP_CHATS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 4);
+                if (data.length < 4) continue;
+                
+                Set<String> memberUsernames = new HashSet<>(Arrays.asList(data[3].split(";")));
+
+                if (memberUsernames.contains(user.getUsername())) {
+                    groups.add(new GroupChat(data[0], data[1]));
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return groups;
+    }
+
+    public static String getGroupChatCreator(String groupId) {
+        if (!Files.exists(Paths.get(GROUP_CHATS_FILE))) {
+            return null;
+        }
+        try {
+            return Files.lines(Paths.get(GROUP_CHATS_FILE))
+                    .map(line -> line.split(",", 4))
+                    .filter(data -> data.length >= 4 && data[0].equals(groupId))
+                    .map(data -> data[2]) // Creator username is the 3rd element
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static List<User> getGroupChatMembers(String groupId) {
+        List<User> members = new ArrayList<>();
+        if (!Files.exists(Paths.get(GROUP_CHATS_FILE))) {
+            return members;
+        }
+        try {
+            String memberUsernamesLine = Files.lines(Paths.get(GROUP_CHATS_FILE))
+                    .map(line -> line.split(",", 4))
+                    .filter(data -> data.length >= 4 && data[0].equals(groupId))
+                    .map(data -> data[3])
+                    .findFirst()
+                    .orElse("");
+            
+            if (!memberUsernamesLine.isEmpty()) {
+                List<String> usernames = Arrays.asList(memberUsernamesLine.split(";"));
+                for (String username : usernames) {
+                    User user = findStudentOrTutorByUsername(username);
+                    if (user != null) {
+                        members.add(user);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return members;
+    }
+
+    public static boolean updateGroupChatMembers(String groupId, Set<User> newMembers) {
+        File inputFile = new File(GROUP_CHATS_FILE);
+        if (!inputFile.exists()) {
+            return false;
+        }
+        List<String> outLines = new ArrayList<>();
+        boolean updated = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 4);
+                if (data.length >= 4 && data[0].equals(groupId)) {
+                    String memberUsernames = newMembers.stream()
+                                                    .map(User::getUsername)
+                                                    .collect(Collectors.joining(";"));
+                    
+                    outLines.add(String.join(",", data[0], data[1], data[2], memberUsernames));
+                    updated = true;
+                } else {
+                    outLines.add(line);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if (updated) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(inputFile, false))) {
+                for (String outLine : outLines) {
+                    writer.write(outLine + System.lineSeparator());
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+        return updated;
+    }
+
+    public static User findUserByUsername(String username) {
+        List<String> userFiles = List.of(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
+        for (String file : userFiles) {
+            try {
+                if (Files.exists(Paths.get(file))) {
+                    Optional<User> user = Files.lines(Paths.get(file))
+                        .map(line -> line.split(",", 5))
+                        .filter(data -> data.length >= 4 && data[1].equals(username))
+                        .map(data -> {
+                            String role = getRoleFromFilePath(file);
+                            String specialization = (role.equals("Tutor") && data.length > 4) ? data[4] : "";
+                            return new User(data[0], data[1], data[2], role, data[3], specialization);
+                        })
+                        .findFirst();
+                    if (user.isPresent()) return user.get();
+                }
+            } catch (IOException e) { e.printStackTrace(); }
+        }
+        return null;
+    }
+
+    private static String getRoleFromFilePath(String filePath) {
+        if (filePath.contains("admins")) return "Admin";
+        if (filePath.contains("tutors")) return "Tutor";
+        if (filePath.contains("receptionists")) return "Receptionist";
+        if (filePath.contains("students")) return "Student";
+        return "Unknown";
+    }
+
+    public static boolean recordAttendance(String courseId, Map<String, String> attendanceData, String date) {
+        // First, delete any existing records for this course on this date to prevent duplicates
+        File inputFile = new File(ATTENDANCE_FILE);
+        if (inputFile.exists()) {
+            try {
+                List<String> outLines = new ArrayList<>();
+                List<String> allLines = Files.readAllLines(Paths.get(ATTENDANCE_FILE));
+                for (String line : allLines) {
+                    String[] data = line.split(",");
+                    if (data.length >= 4 && data[0].equals(courseId) && data[2].equals(date)) {
+                        continue; // Skip this line to delete it
+                    }
+                    outLines.add(line);
+                }
+                Files.write(Paths.get(ATTENDANCE_FILE), outLines);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        // Now, write the new records
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(inputFile, true))) { // true to append
+            for (Map.Entry<String, String> entry : attendanceData.entrySet()) {
+                String studentId = entry.getKey();
+                String status = entry.getValue();
+                String line = String.join(",", courseId, studentId, date, status) + System.lineSeparator();
+                writer.write(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    public static List<String[]> getAttendanceForStudent(String studentId, String courseId) {
+        List<String[]> records = new ArrayList<>();
+        if (!Files.exists(Paths.get(ATTENDANCE_FILE))) {
+            return records;
+        }
+        try {
+            records = Files.lines(Paths.get(ATTENDANCE_FILE))
+                .map(line -> line.split(","))
+                .filter(data -> data.length >= 4 && data[0].equals(courseId) && data[1].equals(studentId))
+                .sorted((r1, r2) -> r2[2].compareTo(r1[2])) // Sort by date, descending
+                .collect(Collectors.toList());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return records;
+    }
+
+    public static boolean updateAttendance(String courseId, String studentId, String date, String newStatus) {
+        File inputFile = new File(ATTENDANCE_FILE);
+        if (!inputFile.exists()) return false;
+        
+        List<String> outLines = new ArrayList<>();
+        boolean updated = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 4);
+                if (data.length >= 4 && data[0].equals(courseId) && data[1].equals(studentId) && data[2].equals(date)) {
+                    outLines.add(String.join(",", data[0], data[1], data[2], newStatus));
+                    updated = true;
+                } else {
+                    outLines.add(line);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if (updated) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(inputFile, false))) {
+                for (String outLine : outLines) {
+                    writer.write(outLine + System.lineSeparator());
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+        return updated;
+    }
+
+    public static String generateAttendanceReport(String studentId, String courseId) {
+        List<String[]> records = getAttendanceForStudent(studentId, courseId);
+        if (records.isEmpty()) {
+            return "No attendance records found for this student in this course.";
+        }
+
+        long totalClasses = records.size();
+        long presentCount = records.stream().filter(r -> "Present".equals(r[3])).count();
+        long absentCount = records.stream().filter(r -> "Absent".equals(r[3])).count();
+        long lateCount = records.stream().filter(r -> "Late".equals(r[3])).count();
+        
+        // Attendance percentage considers "Present" and "Late" as attended.
+        double attendancePercentage = (totalClasses > 0) ? ((double)(presentCount + lateCount) / totalClasses) * 100 : 0;
+
+        User student = findUserByUsername(studentId);
+        String studentName = (student != null) ? student.getFullName() : studentId;
+
+        StringBuilder report = new StringBuilder();
+        report.append("=========================================\n");
+        report.append("       ATTENDANCE SUMMARY REPORT\n");
+        report.append("=========================================\n\n");
+        report.append(String.format(" Student: %s (%s)\n", studentName, studentId));
+        report.append(String.format(" Course ID: %s\n", courseId));
+        report.append("-----------------------------------------\n");
+        report.append(String.format(" Total Classes Recorded: %d\n", totalClasses));
+        report.append(String.format(" Days Present:           %d\n", presentCount));
+        report.append(String.format(" Days Late:              %d\n", lateCount));
+        report.append(String.format(" Days Absent:            %d\n", absentCount));
+        report.append("-----------------------------------------\n");
+        report.append(String.format(" Attendance Percentage:  %.2f%%\n", attendancePercentage));
+        report.append("=========================================\n");
+
+        return report.toString();
+    }
+
+    public static String getCourseIdFromEnrollment(String enrollmentId) {
+        if (!Files.exists(Paths.get(ENROLLMENTS_FILE))) return null;
+        try {
+            return Files.lines(Paths.get(ENROLLMENTS_FILE))
+                    .map(line -> line.split(","))
+                    .filter(data -> data.length >= 3 && data[0].equals(enrollmentId))
+                    .map(data -> data[2]) // The Course ID is the 3rd element
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static boolean submitFeedback(String submitterId, String targetRole, String targetId, String subject, int rating, String content) {
+        String feedbackId = getNextIdForPrefix("FB-", FEEDBACK_FILE);
+        String date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String status = "NEW"; // All new feedback is marked as "NEW"
+
+        // Sanitize content to prevent breaking the CSV format
+        String escapedContent = content.replace(",", ";").replace("\n", " | ");
+
+        // Construct the new line with the submitter's ID included
+        String feedbackLine = String.join(",",
+                feedbackId,
+                submitterId, // Added for traceability
+                targetRole,
+                targetId,
+                subject,
+                String.valueOf(rating),
+                escapedContent,
+                date,
+                status)
+                + System.lineSeparator();
+
+        try {
+            Files.write(Paths.get(FEEDBACK_FILE), feedbackLine.getBytes(),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static List<Feedback> getFeedbackForUser(String userId) {
+        List<Feedback> feedbackList = new ArrayList<>();
+        if (!Files.exists(Paths.get(FEEDBACK_FILE))) {
+            return feedbackList;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(FEEDBACK_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 9);
+                if (data.length >= 9 && data[3].equals(userId)) {
+                    String unescapedContent = data[6].replace(";", ",").replace(" | ", "\n");
+                    Feedback feedback = new Feedback(
+                            data[0],
+                            data[1],
+                            data[2],
+                            data[3],
+                            data[4],
+                            Integer.parseInt(data[5]),
+                            unescapedContent,
+                            LocalDate.parse(data[7]),
+                            data[8]
+                    );
+                    feedbackList.add(feedback);
+                }
+            }
+        } catch (IOException | NumberFormatException | java.time.format.DateTimeParseException e) {
+            e.printStackTrace();
+        }
+        feedbackList.sort(Comparator.comparing(Feedback::getDate).reversed());
+        return feedbackList;
+    }
+
+    public static void markFeedbackAsRead(String userId) {
+        if (!Files.exists(Paths.get(FEEDBACK_FILE))) return;
+
+        List<String> outLines = new ArrayList<>();
+        boolean modified = false;
+        try {
+            List<String> allLines = Files.readAllLines(Paths.get(FEEDBACK_FILE));
+            for (String line : allLines) {
+                String[] data = line.split(",", 9);
+                if (data.length >= 9 && data[3].equals(userId) && "NEW".equalsIgnoreCase(data[8])) {
+                    data[8] = "READ";
+                    outLines.add(String.join(",", data));
+                    modified = true;
+                } else {
+                    outLines.add(line);
+                }
+            }
+
+            if (modified) {
+                Files.write(Paths.get(FEEDBACK_FILE), outLines);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static List<String[]> getTutorClassesForDate(String tutorFullName, LocalDate date) {
+        List<String[]> classes = new ArrayList<>();
+        if (!Files.exists(Paths.get(TIMETABLE_FILE))) {
+            return classes;
+        }
+        
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(TIMETABLE_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 4);
+                if (data.length < 4) continue;
+
+                LocalDate scheduleDate = LocalDate.parse(data[0], formatter);
+                String tutorNameInSchedule = data[3];
+
+                // Check if the date and tutor name match
+                if (scheduleDate.equals(date) && tutorNameInSchedule.equals(tutorFullName)) {
+                    // Return [Time, Subject]
+                    classes.add(new String[]{data[1], data[2]});
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return classes;
+    }
+
+    public static String getCourseIdByTutorAndSubject(String tutorId, String subjectName) {
+        if (!Files.exists(Paths.get(COURSES_FILE))) {
+            return null;
+        }
+        try {
+            return Files.lines(Paths.get(COURSES_FILE))
+                .map(line -> line.split(",", 7))
+                .filter(data -> data.length >= 7 && data[2].equals(tutorId) && data[4].equalsIgnoreCase(subjectName))
+                .map(data -> data[0]) // Return the course ID (the first element)
+                .findFirst()
+                .orElse(null);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static List<String[]> getAttendanceForAllCourses(String studentId) {
+        List<String[]> allRecords = new ArrayList<>();
+        
+        // First, find all courses the student is enrolled in.
+        Set<String> courseIDs = getStudentCourseIDs(studentId);
+        
+        // If the student has no courses, return an empty list.
+        if (courseIDs.isEmpty()) {
+            return allRecords;
+        }
+
+        // For each course, get its attendance and add it to the main list.
+        for (String courseId : courseIDs) {
+            // getAttendanceForStudent returns a List<String[]> where each array is [courseId, studentId, date, status]
+            allRecords.addAll(getAttendanceForStudent(studentId, courseId));
+        }
+
+        // Sort the combined list by date, with the most recent first.
+        allRecords.sort((r1, r2) -> {
+            try {
+                LocalDate date1 = LocalDate.parse(r1[2]);
+                LocalDate date2 = LocalDate.parse(r2[2]);
+                return date2.compareTo(date1); // Sort descending
+            } catch (Exception e) {
+                return 0;
+            }
+        });
+        
+        return allRecords;
+    }
+
+    public static List<AttendanceSummary> getAttendanceSummaryForStudent(String studentId) {
+        List<AttendanceSummary> summaryList = new ArrayList<>();
+        
+        // 1. Get all courses the student is enrolled in.
+        Map<String, String> enrollments = getStudentEnrollments(studentId);
+        if (enrollments.isEmpty()) {
+            return summaryList;
+        }
+
+        // 2. Get all attendance records for this student in one go.
+        List<String[]> allRecords = getAttendanceForAllCourses(studentId);
+
+        // 3. For each course, calculate the summary.
+        for (Map.Entry<String, String> entry : enrollments.entrySet()) {
+            String enrollmentId = entry.getKey();
+            String courseId = getCourseIdFromEnrollment(enrollmentId);
+            String courseName = getCourseInfoById(courseId).split(" - ")[0].split(" \\(")[0];
+
+            if (courseId == null) continue;
+
+            // Filter the records for the current course
+            long totalClasses = allRecords.stream()
+                    .filter(r -> r[0].equals(courseId))
+                    .count();
+
+            // "Attended" includes both "Present" and "Late"
+            long attendedClasses = allRecords.stream()
+                    .filter(r -> r[0].equals(courseId) && (r[3].equals("Present") || r[3].equals("Late")))
+                    .count();
+
+            if (totalClasses > 0) {
+                summaryList.add(new AttendanceSummary(courseId, courseName, (int) attendedClasses, (int) totalClasses));
+            }
+        }
+        
+        return summaryList;
+    }
+
+    private static ResultSummary calculateGradeMetrics(String courseName, double percentage) {
+        String gradeLetter;
+        double gradePoints;
+
+        if (percentage >= 80) { gradeLetter = "A+"; gradePoints = 4.00; }
+        else if (percentage >= 75) { gradeLetter = "A"; gradePoints = 3.70; }
+        else if (percentage >= 70) { gradeLetter = "B+"; gradePoints = 3.30; }
+        else if (percentage >= 65) { gradeLetter = "B"; gradePoints = 3.00; }
+        else if (percentage >= 60) { gradeLetter = "C+"; gradePoints = 2.70; }
+        else if (percentage >= 55) { gradeLetter = "C"; gradePoints = 2.30; }
+        else if (percentage >= 50) { gradeLetter = "D"; gradePoints = 2.00; }
+        else { gradeLetter = "F"; gradePoints = 0.00; }
+
+        return new ResultSummary(courseName, gradeLetter, gradePoints);
+    }
+
+    public static List<ResultSummary> getStudentResultSummaries(String studentId) {
+        List<ResultSummary> resultSummaries = new ArrayList<>();
+        Map<String, String> enrollments = getStudentEnrollments(studentId);
+
+        for (Map.Entry<String, String> entry : enrollments.entrySet()) {
+            String enrollmentId = entry.getKey();
+            String courseInfo = entry.getValue();
+            String courseName = courseInfo.split(" \\(")[0];
+
+            List<String[]> rawResults = getRawResultsForEnrollment(enrollmentId);
+            if (rawResults.isEmpty()) continue;
+
+            double totalScore = 0;
+            double totalMaxScore = 0;
+            for (String[] result : rawResults) {
+                totalScore += Double.parseDouble(result[3]);
+                totalMaxScore += Double.parseDouble(result[4]);
+            }
+
+            double percentage = (totalMaxScore > 0) ? (totalScore / totalMaxScore) * 100 : 0;
+            resultSummaries.add(calculateGradeMetrics(courseName, percentage));
+        }
+        return resultSummaries;
+    }
+
+    public static Message getLastMessage(String user1, String user2) {
+        List<Message> conversation = getConversation(user1, user2); // This call is now correct
+        if (conversation.isEmpty()) {
+            return null;
+        }
+        return conversation.get(conversation.size() - 1);
+    }
+
+    public static Map<String, Integer> getAllUnreadMessageCounts(User currentUser) {
+        if (!Files.exists(Paths.get(CHATS_FILE))) return new HashMap<>();
+        try {
+            return Files.lines(Paths.get(CHATS_FILE))
+                    .map(line -> line.split(",", 5))
+                    .filter(data -> data.length >= 5)
+                    .filter(data -> data[1].equals(currentUser.getUsername())) // Recipient is current user
+                    .filter(data -> "UNREAD".equalsIgnoreCase(data[4]))     // Message is unread
+                    .collect(Collectors.groupingBy(
+                            data -> data[0], // Group by sender's username
+                            Collectors.summingInt(data -> 1) // Count 1 for each message
+                    ));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new HashMap<>();
+        }
+    }
+
+    public static void sendGroupMessage(String senderUsername, String groupId, String content) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String escapedContent = content.replace(",", ";").replace("\n", " | ");
+        String status = "GROUP"; // A special status to identify it
+        
+        // Format: sender,recipient_group_id,content,timestamp,status
+        String messageLine = String.join(",", senderUsername, groupId, escapedContent, timestamp, status) + System.lineSeparator();
+        try {
+            Files.write(Paths.get(CHATS_FILE), messageLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static List<Message> getGroupConversation(String groupId) {
+        List<Message> conversation = new ArrayList<>();
+        if (!Files.exists(Paths.get(CHATS_FILE))) {
+            return conversation;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(CHATS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] data = line.split(",", 5);
+                if (data.length < 5) continue;
+                
+                String recipient = data[1]; // Recipient is the second column
+                if (recipient.equals(groupId)) { // Check if the recipient is this group
+                    String sender = data[0];
+                    String content = data[2].replace(";", ",").replace(" | ", "\n");
+                    LocalDateTime timestamp = LocalDateTime.parse(data[3]);
+                    // Group messages are considered "read" when fetched
+                    conversation.add(new Message(sender, recipient, content, timestamp, true));
+                }
+            }
+        } catch (IOException | java.time.format.DateTimeParseException e) {
+            System.err.println("Error reading group conversation: " + e.getMessage());
+        }
+        conversation.sort(Comparator.comparing(Message::getTimestamp));
+        return conversation;
+    }
+    
+    public static Message getLastGroupMessage(String groupId) {
+        List<Message> conversation = getGroupConversation(groupId);
+        if (conversation == null || conversation.isEmpty()) {
+            return null;
+        }
+        // Return the last message from the sorted list
+        return conversation.get(conversation.size() - 1);
+    }
+
+    public static User findUserById(String userId) {
+        List<String> userFiles = List.of(ADMINS_FILE, TUTORS_FILE, RECEPTIONISTS_FILE, STUDENTS_FILE);
+        for (String file : userFiles) {
+            if (!Files.exists(Paths.get(file))) continue;
+            try {
+                Optional<String[]> userData = Files.lines(Paths.get(file))
+                    .map(line -> line.split(",", 5))
+                    .filter(data -> data.length > 0 && data[0].equals(userId))
+                    .findFirst();
+                
+                if (userData.isPresent()) {
+                    String[] data = userData.get();
+                    String role = getRoleFromFilePath(file); // Assumes you have getRoleFromFilePath
+                    String specialization = (role.equals("Tutor") && data.length > 4) ? data[4] : "";
+                    return new User(data[0], data[1], data[2], role, data[3], specialization);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    private static User findStudentOrTutorByUsername(String username) {
+        List<String> userFiles = List.of(STUDENTS_FILE, TUTORS_FILE);
+
+        for (String file : userFiles) {
+            if (!Files.exists(Paths.get(file))) continue;
+            try {
+                Optional<String[]> userData = Files.lines(Paths.get(file))
+                    .map(line -> line.split(",", 5))
+                    .filter(data -> data.length >= 4 && data[1].equals(username))
+                    .findFirst();
+                
+                if (userData.isPresent()) {
+                    String[] data = userData.get();
+                    String role = getRoleFromFilePath(file);
+                    String specialization = (role.equals("Tutor") && data.length > 4) ? data[4] : "";
+                    return new User(data[0], data[1], data[2], role, data[3], specialization);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return null; // Return null if not found
+    }
+
+    public static int getUnreadFeedbackCount(String userId) {
+        List<Feedback> feedbackList = getFeedbackForUser(userId);
+        long count = feedbackList.stream()
+                                .filter(f -> "NEW".equalsIgnoreCase(f.getStatus()))
+                                .count();
+        return (int) count;
     }
 }
